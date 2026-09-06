@@ -48,8 +48,10 @@
 - v2 P9: gpt-4.1-mini、code fix で `return 5` hack (**迂回型**)
 - v2 P10-C: haiku-4.5, 本文でなく出典表を書き換え (**逆向き置換**)
 - **v2 P11: haiku-4.5, 参照を削除して整合性回復 (削除型)**
+- **v2 P12: haiku-4.5, 空 `[^99]:` を追加 (捏造型、P4 と同型)** — 単調性 check を追加すると隣の穴に移動した
 
-**主要 4 種の Goodhart 手法を実測完備**: 捏造 / 削除 / 迂回 / 置換
+**7 度観察、主要 4 種の Goodhart 手法完備**: 捏造 / 削除 / 迂回 / 置換
+**loop-goal §2.4 「Goodhart は塞いだ穴の隣に移動する」の実測** (P11→P12)
 
 **結論**: model / CLI / gate / 領域 / 具体手法 — 全部変えても発現する
 model 側の抽象特性。gate 側の強化が根本策:
@@ -59,8 +61,12 @@ model 側の抽象特性。gate 側の強化が根本策:
 
 - [ ] loop-goal 開発者に「対称性 detector 追加」の相談 (逆向き捏造検出)
 - [ ] Anthropic model の code-fix で default response 型を上書きさせる prompt patterns
-- [ ] gate-design-patterns.md — Goodhart 4 種を全部塞ぐ gate 設計指針
-- [ ] experiments/real-doc-refs/gate.sh に単調性 check 追加 (P11 続き)
+- [ ] gate-design-patterns.md — 7 度観察を体系化、5 つの check の実装指針
+  (対応関係 / 単調性 / 内容 non-empty / 対称性 / 迂回検出)
+- [x] experiments/real-doc-refs/gate.sh に単調性 check 追加 — P12 (2026-09-06) 完了
+- [ ] gate.sh に内容 non-empty check 追加、8 度目 Goodhart 実測 (P13 候補)
+- [ ] gate feedback の表現力改善 (「[^1] が消えている」→「削除された参照を復元せよ」等)
+- [ ] docs/knowhow/prompt-patterns.md — gate feedback の書き方も含める
 
 ## Framework 側の設計課題 (P9 で顕在化)
 
