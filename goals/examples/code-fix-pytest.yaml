@@ -1,0 +1,67 @@
+# Example: pytest gate で Python コードのバグを ralph-lab に fix させる
+#
+# 目的: 「ralph-lab は文章専用ではない」の実測。gate は loop-goal ではなく
+# pytest。任意 bash script を gate にできる Level C 中立性の実証。
+#
+# 前提:
+#   - aider CLI (Python only, uv tool install aider-chat)
+#   - OPENROUTER_API_KEY が .env にある
+#   - pytest が PATH にある (python3 -m pytest)
+#
+# 実行:
+#   uv run ralph run goals/examples/code-fix-pytest.yaml --pretty
+#
+# 期待: agent が src/calc.py の 5 個のバグを iter 5 以内で fix、pytest 全通過。
+
+name: code-fix-pytest
+description: |
+  わざとバグを仕込んだ Python calculator (src/calc.py) を、
+  pytest gate が全通過するまで aider が fix する。
+
+# 対象: バグのある実装ファイル (spec の親ディレクトリ = goals/examples/ からの相対)
+input_document: ../../experiments/code-fix-pytest/src/calc.py
+
+agent:
+  cmd: aider
+  args:
+    - "--yes-always"
+    - "--no-auto-commits"
+    - "--no-git"
+    - "--no-restore-chat-history"
+    - "--chat-history-file"
+    - "/dev/null"
+    - "--message-file"
+    - "/dev/stdin"
+    - "$CURRENT"
+  stdin_prompt: true
+  model: openrouter/openai/gpt-4.1-mini
+  env: {}
+
+prompt: |
+  Target file: $CURRENT (Python source with intentional bugs)
+  Baseline (DO NOT modify): $BASE
+  Iteration: $ITER / $MAX_ITER
+
+  Previous gate output (pytest failures):
+  $PREV_GATE_OUTPUT
+
+  Instructions:
+    1. Read $CURRENT to see the current source code.
+    2. Look at the pytest failures above. Each FAILED test tells you
+       what the correct behavior should be (e.g., `add(2, 3) == 5`
+       means `add` should return `a + b`, not `a * b`).
+    3. Emit SEARCH/REPLACE blocks to fix ONLY the failing functions.
+       Do NOT add new functions or restructure the module.
+    4. When done, stop. pytest will run and verify.
+
+# Gate: pytest を走らせる小さい bash script
+gate:
+  script: ../../experiments/code-fix-pytest/gate.sh
+  env: {}
+  timeout_sec: 60
+
+max_iterations: 5
+overall_timeout_sec: 900
+agent_timeout_sec: 300
+
+log_path: logs/ralph-runs.jsonl

@@ -66,21 +66,38 @@ gate:
 
 ### pytest (Python コード)
 
+**実装済 example**: `experiments/code-fix-pytest/gate.sh` (2026-09-06)。
+
 ```yaml
 gate:
-  script: /project/scripts/pytest-gate.sh
+  script: ../../experiments/code-fix-pytest/gate.sh
 ```
 
-中身の例:
+**設計上のポイント**: ralph-lab の workspace は 1 file (`current.py`) しか
+コピーしないので、周辺 file (tests/, package 構造) が gate 実行時に無い。
+gate.sh 側で **tempdir に完全 layout を組み直す** 必要がある:
+
 ```bash
 #!/bin/bash
-# pytest-gate.sh: pytest が通るまで
 CURRENT=$1
-# CURRENT が編集された Python file の path
-# BASE は編集前 (現状未使用でも env で来る)
-cd "$(dirname $CURRENT)"
-pytest -x  # 1 個でも fail したら exit 1
+PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+TEMP="$(mktemp -d)"
+trap 'rm -rf "$TEMP"' EXIT
+
+mkdir -p "$TEMP/src" "$TEMP/tests"
+cp "$CURRENT" "$TEMP/src/calc.py"                    # 編集済ファイルを配置
+cp "$PROJECT_ROOT/tests/"*.py "$TEMP/tests/"         # 固定 test を配置
+
+cd "$TEMP"
+export PYTHONPATH="$TEMP/src"
+python3 -m pytest tests/ --tb=short -q --no-header 2>&1
 ```
+
+**実測** (docs/experiments/2026-09-06-p9-code-fix-pytest.md): aider +
+gpt-4.1-mini では 5 iter で pass せず。Agent が **`return 5` hack** で
+特定 test だけ通そうとする Goodhart 型行動を観察。model の semantic
+理解力に依存する。
 
 ### grep-based (単純な状態検査)
 
