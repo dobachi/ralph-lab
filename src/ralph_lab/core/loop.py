@@ -4,11 +4,13 @@ For each iteration:
   1. Render PROMPT (spec.prompt with $CURRENT / $BASE / $ITER /
      $PREV_GATE_OUTPUT substituted)
   2. Run agent CLI as subprocess (fresh context every time — Ralph principle)
-  3. Run gate script as subprocess (Layer A syntactic)
-  4. Run delegations if syntactic gate passed (Layer B, 方式 B)
-  5. If overall gate passed: return. Else: gate stdout → PREV_GATE_OUTPUT.
-  6. After pass, run post_evaluation if configured (Layer C = LLM-as-judge, 方式 C)
-  7. Loop bound by max_iterations and overall_timeout_sec.
+  3. **Verify BASE integrity** (P13-3, Layer 0): agent が BASE.md を書き換えていたら
+     復元し、iter を強制 NG にする (framework tamper 対策)
+  4. Run gate script as subprocess (Layer A syntactic)
+  5. Run delegations if syntactic gate passed (Layer B, 方式 B)
+  6. If overall gate passed AND no tamper: return. Else: gate stdout → PREV_GATE_OUTPUT.
+  7. After pass, run post_evaluation if configured (Layer C = LLM-as-judge, 方式 C)
+  8. Loop bound by max_iterations and overall_timeout_sec.
 """
 
 from __future__ import annotations
@@ -49,6 +51,13 @@ class IterationRecord:
 
     overall_gate_passed: bool = False
     """syntactic gate + delegations の総合判定"""
+
+    base_tampered: bool = False
+    """P13-3: agent が BASE.md を書き換えていた場合 True。
+    tamper 時は overall_gate_passed=False に強制、feedback にも tamper 通知を含める。"""
+
+    base_tamper_message: str = ""
+    """tamper 検出時のサマリ (workspace.verify_and_restore_base() の返す文字列)"""
 
 
 @dataclass
@@ -163,6 +172,8 @@ def _log_iteration(
             for d in record.delegations
         ],
         "overall_gate_passed": record.overall_gate_passed,
+        "base_tampered": record.base_tampered,
+        "base_tamper_message": record.base_tamper_message,
         "prompt_size": record.prompt_size,
         "feedback_used_size": len(record.feedback_used) if record.feedback_used else 0,
     }
@@ -236,13 +247,16 @@ async def run_ralph_loop(
                 timeout_sec=spec.agent_timeout_sec,
             )
 
-            # 3. Run syntactic gate
+            # 3. Verify BASE integrity (P13-3, Layer 0 = framework tamper 対策)
+            base_ok, tamper_msg = workspace.verify_and_restore_base()
+
+            # 4. Run syntactic gate (BASE は復元済なので通常通り)
             gate_result = await run_gate(spec.gate, workspace)
 
-            # 4. Run delegations (Layer B) if syntactic gate passed
+            # 5. Run delegations (Layer B) if syntactic gate passed AND no tamper
             delegations: list[DelegationResult] = []
             delegation_summary = ""
-            if gate_result.passed and spec.gate.delegate_to:
+            if gate_result.passed and base_ok and spec.gate.delegate_to:
                 delegations = await run_all_delegations(
                     spec.gate.delegate_to,
                     workspace.current,
@@ -252,11 +266,11 @@ async def run_ralph_loop(
                 agg_passed, delegation_summary = aggregate_delegations(
                     delegations, spec.gate.aggregate,
                 )
-                overall_passed = agg_passed
+                overall_passed = agg_passed and base_ok
             else:
-                overall_passed = gate_result.passed
+                overall_passed = gate_result.passed and base_ok
 
-            # 5. Log
+            # 6. Log
             record = IterationRecord(
                 iteration=i,
                 agent=agent_result,
@@ -265,19 +279,29 @@ async def run_ralph_loop(
                 prompt_size=len(prompt),
                 delegations=delegations,
                 overall_gate_passed=overall_passed,
+                base_tampered=not base_ok,
+                base_tamper_message=tamper_msg,
             )
             records.append(record)
             _log_iteration(spec.log_path, spec, record)
 
-            # 6. Verdict
+            # 7. Verdict
             if overall_passed:
                 status = "pass"
                 return
-            # 次 iter の feedback: syntactic gate stdout + 委譲 summary
+            # 次 iter の feedback: syntactic gate stdout + 委譲 summary + tamper 通知
             feedback = format_gate_feedback(gate_result)
             if delegation_summary:
                 feedback = (
                     feedback + "\n\n--- Delegation results ---\n" + delegation_summary
+                )
+            if not base_ok:
+                feedback = (
+                    "❌ FRAMEWORK VIOLATION: " + tamper_msg + "\n"
+                    "BASE.md は編集禁止 (source of truth)。次の iter では BASE.md を\n"
+                    "触らず、current.md のみ編集すること。BASE を書き換えても、\n"
+                    "framework が自動復元するので無駄な操作になる。\n\n"
+                    + feedback
                 )
 
     try:

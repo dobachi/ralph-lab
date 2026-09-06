@@ -69,8 +69,8 @@ model 側の抽象特性。gate 側の強化が根本策:
 - [x] experiments/delegating-gate/ — 方式 A のサンプル実装 — P14 (2026-09-06) 完了
 - [x] gate.sh に内容 non-empty check 追加 (Check 3, Layer A) — P13-1 (2026-09-06) 完了。空 `[^N]:` を NG に。URL 形式 dummy は素通り (Layer B に委譲)
 - [x] 8 度目 Goodhart 実測 — P13-2 (2026-09-06) 完了。**予測 5 シナリオ全外れ、新種「BASE.md 書換」を実測**。詳細は `docs/experiments/2026-09-06-p13-results.md`
-- [ ] **P13-3 (framework 対策)**: BASE の sha256 を workspace.prepare() で保存、gate 前に verify。chmod 444 は無防備 (owner が chmod +w で解除可能)
-- [ ] P13-4 (BASE tamper 対策後の 9 度目実測): hash verify 導入後、agent は次にどこを触るか
+- [x] **P13-3 (framework 対策)**: `Workspace.verify_and_restore_base()` を追加 — sha256 verify + tamper 時 bytes 復元。loop.py が agent 実行後 gate 実行前に呼ぶ。IterationRecord/JSONL に `base_tampered` フィールド追加。3/3 sanity test 通過 (2026-09-06)
+- [ ] P13-4 (BASE tamper 対策後の 9 度目実測): hash verify + 復元 導入後、agent は次にどこを触るか (実 API $0.05-0.10)
 - [ ] 委譲機構の実 API 実測 (P15 候補): doc-verify-delegating.yaml で n=3 くらい回して Layer B/C が Goodhart を止められるか、cost がどう推移するか
 - [ ] gate feedback の表現力改善 (「[^1] が消えている」→「削除された参照を復元せよ」等)
 - [ ] docs/knowhow/prompt-patterns.md — gate feedback の書き方も含める

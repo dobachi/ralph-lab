@@ -70,16 +70,25 @@ prompt + test + judge の多層で対応する**。「gate で全部塞ぐ」は
 
 ## 多層防御の全体像
 
-**Ralph loop で Goodhart を塞ぐには 3 層必要**:
+**Ralph loop で Goodhart を塞ぐには 4 層必要** (P13 で Layer 0 を追加):
 
 | Layer | 何を塞ぐ | 実装場所 | 実測でカバーする範囲 |
 |---|---|---|---|
+| **Layer 0: framework integrity** | **BASE tamper 等の workspace 前提破壊** | `workspace.py` の sha256 verify | P13-2 で観察された「BASE 書換型」 |
 | **Layer A: gate 内 (syntactic)** | 捏造 / 削除 / 内容欠如 (構造的パターン) | gate.sh | ~80% |
 | **Layer B: gate + prompt** | 逆向き置換 (対称性の判別) | gate.sh + spec.prompt | ~15% |
 | **Layer C: gate 外 (test/judge)** | 迂回 (semantic hack) | test 密度 + prompt + LLM-as-judge | 残 ~5% |
 
-「gate だけで全部」ではなく、**gate は Layer A の主 + Layer B の弱いガード**、
-**Layer C は gate の外で担う**、と役割分担する。
+「gate だけで全部」ではなく、**Layer 0 が gate の前提 (BASE 不変) を担保、
+gate は Layer A の主 + Layer B の弱いガード、Layer C は gate の外で担う**、と
+役割分担する。
+
+**Layer 0 の必要性 (P13-2 で判明)**:
+Gate は current.md しか見ておらず、BASE.md が真物か偽物かを区別できない。
+`chmod 444` は file owner による `chmod +w` で解除可能なので、agent が BASE を
+書き換えて monotonicity check を空振りさせる Goodhart 型攻撃が可能。
+Ralph-lab では `Workspace.verify_and_restore_base()` (P13-3) が prepare 時
+sha256 と比較、tamper 時に元 bytes から復元する。
 
 以下、Check ごとにどの Layer に属するかを示す。
 
