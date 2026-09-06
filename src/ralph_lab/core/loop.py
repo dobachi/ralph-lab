@@ -132,6 +132,21 @@ def _render_agent_args(
     ]
 
 
+# P17: subprocess の stdout/stderr を先頭 N char だけ log に残す。
+# 判定理由 (PASS/FAIL の 1 行) を post-hoc 分析するのに使う。
+# 全体を残すと log が肥大化するので head のみ。
+_LOG_HEAD_CHARS = 200
+
+
+def _head(text: str, n: int = _LOG_HEAD_CHARS) -> str:
+    """text の先頭 n char を返す。改行込み、UTF-8 safe。"""
+    if not text:
+        return ""
+    if len(text) <= n:
+        return text
+    return text[:n] + "...[TRUNCATED]"
+
+
 def _log_iteration(
     log_path: Path,
     spec: GoalSpec,
@@ -150,6 +165,8 @@ def _log_iteration(
             "timed_out": record.agent.timed_out,
             "stdout_size": len(record.agent.stdout),
             "stderr_size": len(record.agent.stderr),
+            "stdout_head": _head(record.agent.stdout),
+            "stderr_head": _head(record.agent.stderr),
         },
         "gate": {
             "exit_code": record.gate.exit_code,
@@ -157,6 +174,8 @@ def _log_iteration(
             "duration_ms": record.gate.duration_ms,
             "timed_out": record.gate.timed_out,
             "stdout_size": len(record.gate.stdout),
+            "stdout_head": _head(record.gate.stdout),
+            "stderr_head": _head(record.gate.stderr),
         },
         "delegations": [
             {
@@ -168,6 +187,8 @@ def _log_iteration(
                 "stdout_size": len(d.stdout),
                 "stderr_size": len(d.stderr),
                 "error": d.error,
+                "stdout_head": _head(d.stdout),
+                "stderr_head": _head(d.stderr),
             }
             for d in record.delegations
         ],
@@ -198,6 +219,8 @@ def _log_post_evaluation(
         "timed_out": result.timed_out,
         "stdout_size": len(result.stdout),
         "stderr_size": len(result.stderr),
+        "stdout_head": _head(result.stdout),
+        "stderr_head": _head(result.stderr),
         "error": result.error,
     }
     with log_path.open("a", encoding="utf-8") as f:

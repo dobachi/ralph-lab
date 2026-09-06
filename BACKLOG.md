@@ -76,7 +76,7 @@ model 側の抽象特性。gate 側の強化が根本策:
 - [ ] **ralph-lab の spec 設計改善**: `input_document` が「buggy state (基準)」なのか「correct baseline」なのかが曖昧。docs で明示化 or `baseline_document` / `input_document` を別 field 化を検討 (P13 副産物 finding)
 - [x] 委譲機構の実 API 実測 — P15 (2026-09-06) 完了。**Layer C (LLM-as-judge) が 8 度目 content-shaped dummy を検出**。Layer B (fact-checker + doc-review) は素通り (fact-checker は URL なし定義を対象外にする穴、doc-review は「実在概念に見える不完全 citation」を検出できず)。cost 実測 $0.21 (予測 $1.00 の 1/5)。詳細は `docs/experiments/2026-09-06-p15-results.md`
 - [ ] **P16 候補**: judge を OpenAI 系 (gpt-4o) にした Layer C 実測。異 provider 効果 or Anthropic 単独でも十分か
-- [ ] **P17 候補** ($0): JSONL log に `stdout_head` (先頭 200 char) を含める framework 改善。判定推論を post-hoc に分析可能にする
+- [x] **P17 (framework 観測性改善)**: JSONL log に `stdout_head` / `stderr_head` (先頭 200 char + `...[TRUNCATED]` 印) を追加 — agent / gate / delegations / post_evaluation の 4 種全部。判定理由 (PASS/FAIL の 1 行) を post-hoc に分析可能に。2026-09-06 完了、mock test 4/4 pass
 - [ ] **P18 候補**: fact-checker prompt 改訂 (「URL なし = FAIL」)、Layer B 再実測
 - [ ] gate feedback の表現力改善 (「[^1] が消えている」→「削除された参照を復元せよ」等)
 - [ ] docs/knowhow/prompt-patterns.md — gate feedback の書き方も含める
