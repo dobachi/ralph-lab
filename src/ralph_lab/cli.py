@@ -1,6 +1,6 @@
-"""ralph CLI: `ralph run <spec.yaml>` の最小実装。
+"""ralph CLI: `ralph run <spec.yaml>` [--model M | --models M1,M2,...]
 
-`init` / `check` サブコマンドは P6 で後追い予定。
+`init` / `check` サブコマンドは P6-6 以降で追加予定。
 """
 
 from __future__ import annotations
@@ -9,6 +9,7 @@ import argparse
 import asyncio
 import json
 import sys
+from dataclasses import replace
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -17,8 +18,8 @@ from ralph_lab.core.loop import RalphResult, run_ralph_loop
 from ralph_lab.core.spec import GoalSpec
 
 
-def _result_summary(result: RalphResult) -> dict:
-    return {
+def _result_summary(result: RalphResult, *, model: str | None = None) -> dict:
+    summary = {
         "spec_name": result.spec_name,
         "status": result.status,
         "iterations": result.iterations,
@@ -47,6 +48,79 @@ def _result_summary(result: RalphResult) -> dict:
             for r in result.records
         ],
     }
+    if model is not None:
+        summary["model"] = model
+    return summary
+
+
+def _resolve_models(args: argparse.Namespace, spec: GoalSpec) -> list[str | None]:
+    """--models > --model > spec.agent.model の優先順で解決。
+
+    Returns:
+        model 名の list。1 要素なら単発、複数なら multi-model 実行。
+        spec に model が無く CLI からも指定なしの場合は [None] (agent CLI の default 使用)。
+    """
+    if getattr(args, "models", None):
+        return [m.strip() for m in args.models.split(",") if m.strip()]
+    if getattr(args, "model", None):
+        return [args.model]
+    return [spec.agent.model]  # None も許容
+
+
+async def _run_one(
+    spec: GoalSpec,
+    model: str | None,
+    *,
+    workspace_root: Path | None,
+    keep_workspace: bool,
+) -> dict:
+    """1 model 分の run + summary 変換。1 model 失敗しても raise しない。"""
+    # spec.agent (frozen dataclass) を model 上書きで複製
+    agent_updated = replace(spec.agent, model=model)
+    spec_updated = replace(spec, agent=agent_updated)
+    try:
+        result = await run_ralph_loop(
+            spec_updated,
+            workspace_root=workspace_root,
+            keep_workspace=keep_workspace,
+        )
+    except Exception as exc:  # noqa: BLE001
+        return {
+            "spec_name": spec.name,
+            "model": model,
+            "status": "init_error",
+            "error": f"{type(exc).__name__}: {exc}",
+            "iterations": 0,
+            "iteration_summaries": [],
+        }
+    return _result_summary(result, model=model)
+
+
+async def _run_all(
+    spec: GoalSpec,
+    models: list[str | None],
+    *,
+    workspace_root: Path | None,
+    keep_workspace: bool,
+) -> list[dict]:
+    """複数 model を直列に実行 (並列にしない: local IO + API rate 保護)。"""
+    summaries: list[dict] = []
+    for idx, model in enumerate(models):
+        ws_root = None
+        if workspace_root is not None:
+            if len(models) == 1:
+                ws_root = workspace_root
+            else:
+                safe_name = (model or "default").replace("/", "_").replace(":", "_")
+                ws_root = workspace_root / f"{idx:02d}-{safe_name}"
+            ws_root.mkdir(parents=True, exist_ok=True)
+        summary = await _run_one(
+            spec, model,
+            workspace_root=ws_root,
+            keep_workspace=keep_workspace,
+        )
+        summaries.append(summary)
+    return summaries
 
 
 def _cmd_run(args: argparse.Namespace) -> int:
@@ -56,10 +130,12 @@ def _cmd_run(args: argparse.Namespace) -> int:
         print(f"ERROR: failed to load spec: {exc}", file=sys.stderr)
         return 4
 
+    models = _resolve_models(args, spec)
+
     try:
-        result = asyncio.run(
-            run_ralph_loop(
-                spec,
+        summaries = asyncio.run(
+            _run_all(
+                spec, models,
                 workspace_root=args.workspace_root,
                 keep_workspace=args.keep_workspace,
             )
@@ -71,10 +147,19 @@ def _cmd_run(args: argparse.Namespace) -> int:
         print(f"ERROR: {type(exc).__name__}: {exc}", file=sys.stderr)
         return 1
 
-    print(json.dumps(_result_summary(result), ensure_ascii=False, indent=2 if args.pretty else None))
-    if result.passed:
+    if len(summaries) == 1:
+        payload: object = summaries[0]
+    else:
+        payload = {
+            "spec_name": spec.name,
+            "models_count": len(summaries),
+            "runs": summaries,
+        }
+    print(json.dumps(payload, ensure_ascii=False, indent=2 if args.pretty else None))
+
+    if all(s["status"] == "pass" for s in summaries):
         return 0
-    if result.status == "timeout":
+    if any(s["status"] == "timeout" for s in summaries):
         return 2
     return 1
 
@@ -88,8 +173,14 @@ def _build_parser() -> argparse.ArgumentParser:
 
     run_p = sub.add_parser("run", help="Run a Ralph loop from a spec YAML.")
     run_p.add_argument("spec", help="Path to spec YAML.")
+    mg = run_p.add_mutually_exclusive_group()
+    mg.add_argument("--model", help="Override spec.agent.model (single run).")
+    mg.add_argument("--models",
+                    help="Comma-separated list. Runs the goal once per model, "
+                         "each in its own workspace subdirectory.")
     run_p.add_argument("--workspace-root", type=Path, default=None,
-                       help="Workspace directory (default: tempfile.mkdtemp).")
+                       help="Workspace directory (default: tempfile.mkdtemp). "
+                            "In --models mode, each model gets NN-<model_slug>/ subdir.")
     keep = run_p.add_mutually_exclusive_group()
     keep.add_argument("--keep-workspace", dest="keep_workspace",
                       action="store_true", default=True,

@@ -1,0 +1,67 @@
+# Example: aider + OpenRouter で loop-goal gate を通過するまで文書を修正する
+#
+# 前提:
+#   - aider CLI が PATH にある (uv tool install aider-chat)
+#   - OPENROUTER_API_KEY が .env にある
+#   - loop-goal skill が install 済 (claude-skills-marketplace 経由)
+#
+# 実行:
+#   uv run ralph run goals/examples/doc-verify-loop-goal-aider.yaml --pretty
+#
+# 期待: broken_ref.md の 2 findings ([S-99] 未定義 / S-06 未使用) が
+# aider の SEARCH/REPLACE ブロックで修正され、gate exit 0 になる。
+#
+# Note: aider は fresh subprocess で prompt を受け、diff を LLM に出させ
+# apply する。--no-git は workspace が git 外なので必須。
+
+name: doc-verify-loop-goal-aider
+description: |
+  aider CLI 経由で OpenRouter を使い、loop-goal gate を通過するまで
+  broken_ref.md を修正する。
+
+input_document: ~/.claude/plugins/cache/dobachi-skills/loop-goal/0.3.0/skills/loop-goal/detectors/fixtures/broken_ref.md
+
+agent:
+  cmd: aider
+  args:
+    - "--yes-always"           # 全プロンプト自動承認
+    - "--no-auto-commits"      # aider の勝手 commit を止める
+    - "--no-git"               # workspace は git 外
+    - "--no-restore-chat-history"  # 前 iter の history を読み込まない
+    - "--chat-history-file"
+    - "/dev/null"              # history file を無効化 (Ralph 原則: fresh context)
+    - "--message-file"
+    - "/dev/stdin"             # prompt を stdin から
+    # ↑ /dev/stdin は Linux/macOS 前提。Windows 未対応
+    - "$CURRENT"               # 編集対象ファイル (driver が render 時に置換)
+  stdin_prompt: true
+  model: openrouter/openai/gpt-4.1-mini
+  env: {}
+  # ↑ OPENROUTER_API_KEY は親プロセス (ralph) の環境から継承される
+
+prompt: |
+  Target file: $CURRENT
+  Baseline (DO NOT modify): $BASE
+  Iteration: $ITER / $MAX_ITER
+
+  Previous gate output:
+  $PREV_GATE_OUTPUT
+
+  Instructions:
+    1. Read $CURRENT (already added to chat by aider).
+    2. Look at the previous gate output above. Each failing detector lists
+       specific line numbers and findings.
+    3. Emit SEARCH/REPLACE blocks to fix ONLY the failing findings.
+       Do not rewrite the file broadly. Do not delete substantive content.
+    4. When done, stop. The gate will verify.
+
+gate:
+  script: ~/.claude/plugins/cache/dobachi-skills/loop-goal/0.3.0/skills/loop-goal/gate.sh
+  env: {}
+  timeout_sec: 60
+
+max_iterations: 5
+overall_timeout_sec: 900
+agent_timeout_sec: 300
+
+log_path: logs/ralph-runs.jsonl

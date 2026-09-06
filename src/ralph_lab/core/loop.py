@@ -14,13 +14,13 @@ from __future__ import annotations
 import asyncio
 import json
 import time
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 from datetime import datetime, timezone
 from pathlib import Path
 
 from ralph_lab.core.agent_cli import AgentResult, run_agent
 from ralph_lab.core.gate import GateResult, format_gate_feedback, run_gate
-from ralph_lab.core.spec import GoalSpec
+from ralph_lab.core.spec import AgentSpec, GoalSpec
 from ralph_lab.core.workspace import Workspace
 
 
@@ -52,6 +52,22 @@ class RalphResult:
         return self.status == "pass"
 
 
+def _substitute_path_placeholders(
+    text: str,
+    workspace: Workspace,
+    iteration: int,
+    max_iterations: int,
+) -> str:
+    """Path 系 placeholder のみを置換する。args に埋めても安全なもの。"""
+    return (
+        text
+        .replace("$CURRENT", str(workspace.current))
+        .replace("$BASE", str(workspace.base))
+        .replace("$ITER", str(iteration + 1))
+        .replace("$MAX_ITER", str(max_iterations))
+    )
+
+
 def _render_prompt(
     template: str,
     workspace: Workspace,
@@ -68,14 +84,26 @@ def _render_prompt(
       $MAX_ITER          最大 iteration
       $PREV_GATE_OUTPUT  前 iter の gate stdout (初回は空文字)
     """
-    return (
-        template
-        .replace("$CURRENT", str(workspace.current))
-        .replace("$BASE", str(workspace.base))
-        .replace("$ITER", str(iteration + 1))
-        .replace("$MAX_ITER", str(max_iterations))
-        .replace("$PREV_GATE_OUTPUT", previous_feedback or "(first iteration; no prior gate output)")
+    text = _substitute_path_placeholders(template, workspace, iteration, max_iterations)
+    return text.replace(
+        "$PREV_GATE_OUTPUT",
+        previous_feedback or "(first iteration; no prior gate output)",
     )
+
+
+def _render_agent_args(
+    args: list[str],
+    workspace: Workspace,
+    iteration: int,
+    max_iterations: int,
+) -> list[str]:
+    """spec.agent.args の path 系 placeholder ($CURRENT, $BASE, $ITER, $MAX_ITER)
+    を置換する。$PREV_GATE_OUTPUT は含めない (長すぎて argv に不適)。
+    """
+    return [
+        _substitute_path_placeholders(a, workspace, iteration, max_iterations)
+        for a in args
+    ]
 
 
 def _log_iteration(
@@ -136,14 +164,18 @@ async def run_ralph_loop(
     async def _loop() -> None:
         nonlocal feedback, status
         for i in range(spec.max_iterations):
-            # 1. Render PROMPT
+            # 1. Render PROMPT + agent.args (both may contain placeholders)
             prompt = _render_prompt(
                 spec.prompt, workspace, i, spec.max_iterations, feedback,
             )
+            rendered_args = _render_agent_args(
+                spec.agent.args, workspace, i, spec.max_iterations,
+            )
+            rendered_agent = replace(spec.agent, args=rendered_args)
 
             # 2. Run agent CLI (fresh subprocess)
             agent_result = await run_agent(
-                spec.agent,
+                rendered_agent,
                 prompt,
                 workdir=workspace.root,
                 timeout_sec=spec.agent_timeout_sec,
