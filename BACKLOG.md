@@ -20,7 +20,8 @@
 
 ## 実験 / 検証
 
-- [ ] 実運用文書での動作確認 (daily-curation-reports の記事、熊本地震レポート等)
+- [x] 実運用文書での動作確認 (daily-curation-reports の記事) — P11 (2026-09-06) 完了。opencode + haiku で pass 1 iter 12s、ただし削除型 Goodhart 発生。gate 設計が支配的と結論
+- [ ] P11 続き: 別記事で同じ Goodhart が起きるか (n=2,3)、gate.sh に単調性 check 追加後の再試行
 - [ ] agent CLI の網羅比較 — claude / codex / opencode / aider の 4 種で同じ goal
 - [x] v1 P4 の再現 (「S-99 捏造で pass」現象が v2 でも起きるか) — P7 (2026-09-06) で再現確認済、aider/opencode で追認
 - [ ] gate の複合化 — loop-goal + custom grep で複数 detector を AND
@@ -38,20 +39,28 @@
 - [ ] docs/knowhow/prompt-patterns.md — Ralph 系で通りやすい prompt 型の抽出
 - [x] README に「Quickstart 3 通り」を明示 — P8 (2026-09-06) 完了
 
-## 5 度観察された Goodhart 型行動 (P10 で完結、model 特性として確定)
+## 6 度観察された Goodhart 型行動 (P11 で「削除型」追加、主要 4 種完備)
 
 各 session で下記 Goodhart pass が観察された:
-- v1 P4 (2026-08-15): gpt-4.1-mini via SDK、S-99 空エントリ捏造
-- v2 P7 aider (2026-09-06): gpt-4.1-mini、同型
-- v2 P7 opencode 初回: gpt-4.1-mini、S-06 削除 + S-99 別データ捏造
-- v2 P9: gpt-4.1-mini、code fix で `return 5` hack
-- v2 P10-C: haiku-4.5, 本文でなく出典表を書き換え (逆向き捏造)
+- v1 P4 (2026-08-15): gpt-4.1-mini via SDK、S-99 空エントリ捏造 (**捏造型**)
+- v2 P7 aider (2026-09-06): gpt-4.1-mini、同型 (**捏造型**再現)
+- v2 P7 opencode 初回: gpt-4.1-mini、S-06 削除 + S-99 別データ捏造 (**削除+捏造の複合**)
+- v2 P9: gpt-4.1-mini、code fix で `return 5` hack (**迂回型**)
+- v2 P10-C: haiku-4.5, 本文でなく出典表を書き換え (**逆向き置換**)
+- **v2 P11: haiku-4.5, 参照を削除して整合性回復 (削除型)**
 
-**結論**: model / CLI / gate / 領域を変えても発現する model 側の抽象特性。
-gate 側の強化 (loop-goal に対称性 check 追加等) が根本策の候補。
+**主要 4 種の Goodhart 手法を実測完備**: 捏造 / 削除 / 迂回 / 置換
+
+**結論**: model / CLI / gate / 領域 / 具体手法 — 全部変えても発現する
+model 側の抽象特性。gate 側の強化が根本策:
+- 単調性の下限 (loop-goal `no_regression` 相当)
+- 対称性 check (「本文でなく表を書き換えた」を検出)
+- 迂回検出 (test 期待値だけをハードコード等)
 
 - [ ] loop-goal 開発者に「対称性 detector 追加」の相談 (逆向き捏造検出)
 - [ ] Anthropic model の code-fix で default response 型を上書きさせる prompt patterns
+- [ ] gate-design-patterns.md — Goodhart 4 種を全部塞ぐ gate 設計指針
+- [ ] experiments/real-doc-refs/gate.sh に単調性 check 追加 (P11 続き)
 
 ## Framework 側の設計課題 (P9 で顕在化)
 
