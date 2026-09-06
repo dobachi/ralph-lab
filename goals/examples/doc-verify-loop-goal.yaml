@@ -1,0 +1,59 @@
+# Example: loop-goal を gate に使う文書検証 Ralph loop
+#
+# 前提:
+#   - claude CLI が PATH にあり、~/.claude/ に認証済
+#   - loop-goal skill が install 済 (claude-skills-marketplace 経由)
+#
+# 実行:
+#   uv run ralph run goals/examples/doc-verify-loop-goal.yaml --pretty
+#
+# 期待: broken_ref.md の 2 findings ([S-99] 未定義 / S-06 未使用) が
+# 数 iteration 内に修正され gate exit 0 になる。
+
+name: doc-verify-loop-goal
+description: |
+  loop-goal の gate.sh を通るまで、fixture の broken_ref.md を修正する。
+  gate は refs_integrity + declared_counts + citation_presence +
+  forbidden_phrases + no_regression の集合。
+
+input_document: ~/.claude/plugins/cache/dobachi-skills/loop-goal/0.3.0/skills/loop-goal/detectors/fixtures/broken_ref.md
+
+# Agent CLI: claude (Ralph 系の推奨。--dangerously-skip-permissions で
+# stdin から prompt 受け取り、file 編集ツールを自前で使う)。
+agent:
+  cmd: claude
+  args:
+    - "-p"
+    - "--dangerously-skip-permissions"
+  stdin_prompt: true
+
+# PROMPT.md 相当。$CURRENT $BASE $ITER $MAX_ITER $PREV_GATE_OUTPUT を driver が置換。
+prompt: |
+  You are editing a document to make a verification gate pass.
+
+  Target file: $CURRENT
+  Baseline (DO NOT modify): $BASE
+  Iteration: $ITER / $MAX_ITER
+
+  Previous gate output:
+  $PREV_GATE_OUTPUT
+
+  Instructions:
+    1. Read $CURRENT to see the current state (it may have been edited in
+       a previous iteration).
+    2. Look at the previous gate output above. Each failing detector lists
+       specific line numbers and findings.
+    3. Make targeted edits to $CURRENT. Do NOT delete substantive content.
+    4. When done, stop. The gate will verify.
+
+# Gate: loop-goal の gate.sh。BASE 環境変数は driver が自動で埋める。
+gate:
+  script: ~/.claude/plugins/cache/dobachi-skills/loop-goal/0.3.0/skills/loop-goal/gate.sh
+  env: {}
+  timeout_sec: 60
+
+max_iterations: 5
+overall_timeout_sec: 900
+agent_timeout_sec: 300
+
+log_path: logs/ralph-runs.jsonl
