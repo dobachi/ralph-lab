@@ -1,0 +1,64 @@
+# Example: opencode + OpenRouter で loop-goal gate を通過するまで文書を修正する
+#
+# 前提:
+#   - opencode CLI が PATH にある (npm install -g opencode-ai)
+#   - OPENROUTER_API_KEY が .env にある (opencode は env vars を自動認識)
+#   - loop-goal skill が install 済
+#
+# 実行:
+#   uv run ralph run goals/examples/doc-verify-loop-goal-opencode.yaml --pretty
+#
+# opencode 固有事項:
+#   - `opencode run` は message を positional array で受けるが、`-f` (file
+#     attach) が array なので長い prompt を positional に置くと `-f` の
+#     追加値と誤解される (実測 2026-09-06)。**必ず stdin から message を
+#     流す**。stdin_prompt: true + args から prompt を除去する形。
+#   - --auto で permission 自動承認 (Ralph loop 必須)
+#   - built-in file edit tool を持つ (aider の SEARCH/REPLACE と違い、
+#     Anthropic model でも安定動作の可能性あり — 要検証)
+
+name: doc-verify-loop-goal-opencode
+description: |
+  opencode CLI 経由で OpenRouter を使い、loop-goal gate を通過するまで
+  broken_ref.md を修正する。aider との比較実験用。
+
+input_document: ~/.claude/plugins/cache/dobachi-skills/loop-goal/0.3.0/skills/loop-goal/detectors/fixtures/broken_ref.md
+
+agent:
+  cmd: opencode
+  args:
+    - "run"
+    - "--auto"                # permission 自動承認 (Ralph loop 必須)
+    - "-f"
+    - "$CURRENT"              # 対象ファイル (driver が render 時に置換)
+  stdin_prompt: true          # message は stdin から (positional 衝突回避)
+  model: openrouter/openai/gpt-4.1-mini
+  # ↑ driver が `--model <model>` を argv 末尾に足す。opencode の -m の別名
+  env: {}
+
+prompt: |
+  Target file: $CURRENT
+  Baseline (DO NOT modify): $BASE
+  Iteration: $ITER / $MAX_ITER
+
+  Previous gate output (findings to fix):
+  $PREV_GATE_OUTPUT
+
+  Instructions:
+    1. Read $CURRENT to see the current state.
+    2. Look at the previous gate output above. Each failing detector lists
+       specific line numbers and findings.
+    3. Use the built-in file edit tool to fix ONLY the failing findings.
+       Do not delete substantive content. Do not rewrite the file broadly.
+    4. When done, stop. The gate will verify.
+
+gate:
+  script: ~/.claude/plugins/cache/dobachi-skills/loop-goal/0.3.0/skills/loop-goal/gate.sh
+  env: {}
+  timeout_sec: 60
+
+max_iterations: 5
+overall_timeout_sec: 900
+agent_timeout_sec: 300
+
+log_path: logs/p7-comparison.jsonl
