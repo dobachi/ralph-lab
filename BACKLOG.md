@@ -82,8 +82,10 @@ model 側の抽象特性。gate 側の強化が根本策:
 - [ ] **P21 候補**: gpt-4o-mini で judge 実測 ($0.01/回)、cheap tier でも検出可能か
 - [x] **P17 (framework 観測性改善)**: JSONL log に `stdout_head` / `stderr_head` (先頭 200 char + `...[TRUNCATED]` 印) を追加 — agent / gate / delegations / post_evaluation の 4 種全部。判定理由 (PASS/FAIL の 1 行) を post-hoc に分析可能に。2026-09-06 完了、mock test 4/4 pass
 - [x] **P18 実測 (2026-09-06)**: fact-checker prompt 改訂 (「URL/DOI/ISBN 要求、prose paraphrase は不可」) — Layer B が確実に FAIL 判定できるように。P15/P16 で素通りしていた URL なし descriptive dummy を捕捉。ただし agent (haiku-4.5) は clean fix できず、Layer C も FAIL で 3 層一致の「fabrication」認定 (status=max_iterations)。実測 cost $0.23。詳細は `docs/experiments/2026-09-06-p18-results.md`
-- [ ] **P22 候補** ($0.20-0.30): 統合実測 (P19+P20 有効化)。P18 spec に retries=2 を入れて Layer B doc-review の非決定性が緩和されるか実測
-- [ ] **P23 候補** (framework): agent の feedback 追随能力向上 prompt patterns。「なぜ FAIL か」明示、「clean fix path」hint
+- [x] **P22 実測 (2026-09-06)**: retries=2 infrastructure は正常動作 (`attempts=3` 記録) だが、本 case では **非決定性は bottleneck ではなかった** (fact-checker は 3 shot 全部 FAIL で決定的)。副次的に **agent の削除 over-reaction** を新観察 (`[^1]:` def を削除)。詳細は `docs/experiments/2026-09-06-p22-results.md`
+- [x] **P23 (prompt-patterns knowhow)**: `docs/knowhow/prompt-patterns.md` 新規、P15/P16/P18/P22 の 4 実験から 4 pattern 抽出 — delegation prompt (狭く specific)、agent prompt (削除禁止 + clean fix hint)、gate feedback (どう直すかを明示)、post_evaluation (Goodhart 4 種 enumerate)
+- [ ] **P24 候補**: Layer B 非決定性の実測 — 50/50 で振れる fixture で retries=2 の実効性再確認
+- [ ] **P25 候補**: agent prompt Pattern 2 (削除禁止 + clean fix hint) の実測、削除 over-reaction が緩和されるか
 - [ ] gate feedback の表現力改善 (「[^1] が消えている」→「削除された参照を復元せよ」等)
 - [ ] docs/knowhow/prompt-patterns.md — gate feedback の書き方も含める
 
