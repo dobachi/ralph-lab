@@ -74,7 +74,10 @@ model 側の抽象特性。gate 側の強化が根本策:
 - [x] **P13-3 (defense-in-depth)**: `Workspace.verify_and_restore_base()` を追加 — sha256 verify + tamper 時 bytes 復元。実測での起動事例は現時点なし (P13-2 誤読が動機だったが、`chmod 444` owner-bypass の事実は残る)。3/3 sanity test 通過
 - [x] P13-4 (実測): P13-3 導入後の runtime 検証も同時に完了。base_tampered は False で終わり = 想定通り
 - [ ] **ralph-lab の spec 設計改善**: `input_document` が「buggy state (基準)」なのか「correct baseline」なのかが曖昧。docs で明示化 or `baseline_document` / `input_document` を別 field 化を検討 (P13 副産物 finding)
-- [ ] 委譲機構の実 API 実測 (P15 候補): doc-verify-delegating.yaml で n=3 くらい回して Layer B/C が Goodhart を止められるか、cost がどう推移するか
+- [x] 委譲機構の実 API 実測 — P15 (2026-09-06) 完了。**Layer C (LLM-as-judge) が 8 度目 content-shaped dummy を検出**。Layer B (fact-checker + doc-review) は素通り (fact-checker は URL なし定義を対象外にする穴、doc-review は「実在概念に見える不完全 citation」を検出できず)。cost 実測 $0.21 (予測 $1.00 の 1/5)。詳細は `docs/experiments/2026-09-06-p15-results.md`
+- [ ] **P16 候補**: judge を OpenAI 系 (gpt-4o) にした Layer C 実測。異 provider 効果 or Anthropic 単独でも十分か
+- [ ] **P17 候補** ($0): JSONL log に `stdout_head` (先頭 200 char) を含める framework 改善。判定推論を post-hoc に分析可能にする
+- [ ] **P18 候補**: fact-checker prompt 改訂 (「URL なし = FAIL」)、Layer B 再実測
 - [ ] gate feedback の表現力改善 (「[^1] が消えている」→「削除された参照を復元せよ」等)
 - [ ] docs/knowhow/prompt-patterns.md — gate feedback の書き方も含める
 
