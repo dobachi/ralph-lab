@@ -379,7 +379,17 @@ loop-goal §3 の「主観判断は評価者モデルへ」の原則と一致:
 - ralph-lab 側の実装: `run_ralph_loop` の後に `run_judge` を挟む、あるいは
   gate 内で最後の check として呼ぶ
 
-これは BACKLOG 候補として **P14 相当**の追加実装領域。
+### P14 で実装済 (2026-09-06)
+
+Ralph-lab core に **3 通りの委譲機構**を実装完了:
+
+| 方式 | どこに書く | 特徴 | 例 |
+|---|---|---|---|
+| **A** | `gate.sh` 内で subprocess | ralph-lab core 変更ゼロ、gate 側で完結 | `experiments/delegating-gate/gate.sh` |
+| **B** | `spec.yaml` の `gate.delegate_to[]` | core 拡張、複数 spec で使い回し可能 | `goals/examples/doc-verify-delegating.yaml` |
+| **C** | `spec.yaml` の `post_evaluation` | Ralph pass 後 1 回だけ LLM-as-judge を呼ぶ | 同上 |
+
+詳細は [gate-delegation-patterns.md](gate-delegation-patterns.md) 参照。
 
 ---
 
@@ -406,14 +416,15 @@ P13 予定、4-5 は Layer B/C の設計課題。
 | 1. 対応関係 | A | ✅ (P11) | `refs vs defs` の subset 演算 |
 | 2. 単調性 | A | ✅ (P12) | `base_refs ⊂ curr_refs`, `base_defs ⊂ curr_defs` |
 | 3. 内容 non-empty | A | ❌ (P13 予定) | 空 `[^N]: ` を検出できていない |
-| 4. 対称性 | B | 部分的 (prompt で対応) | gate 側の hash check は未実装、prompt に「触るな」記載あり |
-| 5. 迂回検出 | C | 未実装 | 適用外 (文書検証タスクでは semantic 判定困難)、Layer C の対策も未 |
+| 4. 対称性 | B | 部分的 (prompt で対応) + **委譲可能 (P14)** | gate 側 hash check は未実装、prompt + `delegate_to: doc-review` で強化可能 |
+| 5. 迂回検出 | C | **委譲可能 (P14)** | `post_evaluation` に LLM-as-judge を挿す運用が可能に |
 
 **次のマイルストーン**: Check 3 の実装 + 実測 (P13 予定)。
 8 度目 Goodhart がどこに移動するかを観察する。
 
-**中期**: LLM-as-judge の PoC (P14 候補)。gate + judge の 2 段構えで
-Layer A + C の合わせ技を試す。
+**P14 済**: Layer B/C の委譲機構を core に実装。Check 4 は
+`gate.delegate_to[doc-review]`、Check 5 は `post_evaluation` で対応可能。
+[gate-delegation-patterns.md](gate-delegation-patterns.md) を参照。
 
 ---
 

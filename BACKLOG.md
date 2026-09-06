@@ -63,7 +63,11 @@ model 側の抽象特性。gate 側の強化が根本策:
 - [ ] Anthropic model の code-fix で default response 型を上書きさせる prompt patterns
 - [x] gate-design-patterns.md — 7 度観察を Goodhart 4 手法 × gate 5 check で体系化 — 2026-09-06 完了
 - [x] experiments/real-doc-refs/gate.sh に単調性 check 追加 — P12 (2026-09-06) 完了
+- [x] **委譲機構 3 方式実装** — P14 (2026-09-06) 完了。方式 A (gate.sh 内 subprocess) + 方式 B (`gate.delegate_to[]`) + 方式 C (`post_evaluation`)、Layer B/C を core に統合
+- [x] gate-delegation-patterns.md — 3 方式の設計解説 — P14 (2026-09-06) 完了
+- [x] experiments/delegating-gate/ — 方式 A のサンプル実装 — P14 (2026-09-06) 完了
 - [ ] gate.sh に内容 non-empty check 追加、8 度目 Goodhart 実測 (P13 候補)
+- [ ] 委譲機構の実 API 実測 (P15 候補): doc-verify-delegating.yaml で n=3 くらい回して Layer B/C が Goodhart を止められるか、cost がどう推移するか
 - [ ] gate feedback の表現力改善 (「[^1] が消えている」→「削除された参照を復元せよ」等)
 - [ ] docs/knowhow/prompt-patterns.md — gate feedback の書き方も含める
 

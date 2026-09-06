@@ -24,7 +24,7 @@ Gate-neutral **Ralph loop** driver in Python. Wraps agent CLIs
 
 ## Status
 
-**Alpha.** ~P8 complete (2026-09-06):
+**Alpha.** ~P14 complete (2026-09-06):
 
 - [x] Core loop (subprocess ベース, gate 中立)
 - [x] Multi-model 比較 (`ralph run --models m1,m2,m3`)
@@ -32,6 +32,7 @@ Gate-neutral **Ralph loop** driver in Python. Wraps agent CLIs
 - [x] 3 templates: claude / aider / opencode
 - [x] Observability (JSONL log)
 - [x] Docs (knowhow / experiments / research)
+- [x] **委譲機構 (P14)**: `gate.delegate_to[]` (方式 B) + `post_evaluation` (方式 C)
 - [ ] `--parallel` for multi-model (直列のみ)
 - [ ] Cost tracking (OpenRouter `/generation` endpoint)
 - [ ] Windows 対応 (`/dev/stdin` 依存の解消)
@@ -123,6 +124,51 @@ uv run ralph run goals/my-doc-opencode.yaml
 **opencode 固有ノウハウ**: `-f` (file attach) と長い prompt が衝突する
 ため `stdin_prompt: true` 必須。template で対応済み。詳細は
 [docs/knowhow/agent-cli-opencode.md](docs/knowhow/agent-cli-opencode.md)。
+
+## Delegation: 苦手な judge を別スキルに委譲する (P14)
+
+Ralph-lab の gate は syntactic 判定に強く、semantic 判定は苦手。
+既存の他スキル (fact-checker / doc-review / verify-content 等) や
+別 model の LLM-as-judge に **subprocess で委譲**できる。3 方式:
+
+**方式 A: `gate.sh` 内で subprocess** — core 変更ゼロ。
+[experiments/delegating-gate/](experiments/delegating-gate/) 参照。
+
+**方式 B: `spec.yaml` の `gate.delegate_to[]`** — Layer B。
+Syntactic gate pass 後に走る委譲群を宣言的に書ける:
+
+```yaml
+gate:
+  script: experiments/real-doc-refs/gate.sh
+  delegate_to:
+    - name: fact-checker
+      cmd: claude
+      args: [-p, --dangerously-skip-permissions]
+      prompt: |
+        Invoke the fact-checker skill on {file}.
+        Output PASS or FAIL: <reason>.
+      fail_pattern: '^FAIL'
+      stdin_prompt: true
+      timeout_sec: 180
+  aggregate: all_pass  # or any_pass
+```
+
+**方式 C: `spec.yaml` の `post_evaluation`** — Layer C (LLM-as-judge)。
+Ralph pass 後 **1 回だけ** 走る post-hoc 判定:
+
+```yaml
+post_evaluation:
+  cmd: claude
+  args: [-p, --dangerously-skip-permissions]
+  prompt: |
+    Detect Goodhart-type hacks in {file}. Output PASS or FAIL: <reason>.
+  fail_pattern: '^FAIL'
+  stdin_prompt: true
+```
+
+- 完全例: [goals/examples/doc-verify-delegating.yaml](goals/examples/doc-verify-delegating.yaml)
+- 設計解説: [docs/knowhow/gate-delegation-patterns.md](docs/knowhow/gate-delegation-patterns.md)
+- **警告**: judge は agent と異 provider を推奨 (Goodhart 相関エラー対策)
 
 ## What ralph-lab does NOT do
 
