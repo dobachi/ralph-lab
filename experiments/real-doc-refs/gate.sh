@@ -118,22 +118,40 @@ if base_path and base_path.is_file():
     report.append(f"  BASE refs      : {sorted(base_refs, key=int)}")
     report.append(f"  BASE defs      : {sorted(base_defs, key=int)}")
 
-# 対応関係の findings
+# 対応関係の findings — 「何が壊れた」だけでなく「どう直すか」を明示 (P23 pattern)
 if undefined:
-    report.append(f"  ❌ 未定義 (本文にあるが `[^N]: ...` 定義がない): {undefined}")
+    report.append(f"  ❌ 未定義参照: 本文に [^{undefined[0]}] があるが `[^{undefined[0]}]: ...` 定義がない: {undefined}")
+    # 「どう直すか」の hint (baseline に存在する ref を復元する path)
+    baseline_ids = sorted(base_refs, key=int) if base_refs else sorted(curr_defs, key=int)
+    if baseline_ids:
+        report.append(
+            f"     → 修正案: 本文の [^{undefined[0]}] を、baseline に存在する既存 ref (例: [^{baseline_ids[0]}]) に置換すること。"
+        )
+        report.append(
+            f"     → 新しい `[^{undefined[0]}]: ...` 定義を追加してはいけない (捏造禁止)。"
+        )
 if unused:
-    report.append(f"  ⚠️  未使用 (`[^N]: ...` 定義はあるが本文で参照されない): {unused}")
+    report.append(f"  ⚠️  未使用定義: `[^{unused[0]}]: ...` 定義があるが本文で参照されない: {unused}")
 
-# 単調性の findings
+# 単調性の findings — 削除された ref/def を復元させる指示
 if missing_refs:
+    ref_id = missing_refs[0]
     report.append(
-        f"  ❌ 単調性違反: BASE で参照されていた [^N] が current で消えている: "
-        f"{missing_refs}"
+        f"  ❌ 削除禁止違反: BASE で参照されていた [^{ref_id}] が current で消えている: {missing_refs}"
+    )
+    report.append(
+        f"     → 削除された [^{ref_id}] を本文に戻すこと。BASE の該当箇所を参照。"
+    )
+    report.append(
+        f"     → 「消せば良い」ではなく「原状復元 or 別の正しい ref に置換」が正解。"
     )
 if missing_defs:
+    def_id = missing_defs[0]
     report.append(
-        f"  ❌ 単調性違反: BASE の [^N]: 定義が current で消えている: "
-        f"{missing_defs}"
+        f"  ❌ 削除禁止違反: BASE の [^{def_id}]: 定義が current で消えている: {missing_defs}"
+    )
+    report.append(
+        f"     → 削除された `[^{def_id}]: ...` 定義を BASE から復元すること (source of truth)。"
     )
 
 # 内容 non-empty (Check 3) の findings
