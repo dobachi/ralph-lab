@@ -149,12 +149,36 @@ block が生成できず gate 通過できず。
 3. aider の SEARCH/REPLACE 生成は OpenAI model 系との相性で調整されており
    Anthropic model 系は fine-tuning されていない
 
-### 暫定的な対処 (未検証)
+### 暫定的な対処 (P10-C 2026-09-06 で **`--edit-format udiff` を検証済み** ✅)
 
-- `--edit-format udiff` や `--edit-format whole` に切り替えると Anthropic
-  model でも動く可能性
-- aider の設定 `AIDER_EDIT_FORMAT` env で試せる
-- あるいは Anthropic model には aider 経由でなく claude CLI 直接を使う
+**`--edit-format udiff` は Anthropic model で有効**と確定 (P10-C 実測):
+
+- SEARCH/REPLACE (haiku-4.5): edit 0 件、5 iter 全失敗
+- **udiff (haiku-4.5): pass 2 iter, 14 秒**
+
+spec の args に追加:
+
+```yaml
+agent:
+  args:
+    - "--edit-format"
+    - "udiff"        # ★ SEARCH/REPLACE の代わりに
+    - "--yes-always"
+    - ...
+```
+
+`goals/examples/doc-verify-loop-goal-aider-udiff.yaml` を参照。
+
+**ただし別の落とし穴**: udiff で pass しても、**「逆向き捏造」型の Goodhart
+が起きる**ことを実測 (P10-C の diff: 本文の [S-99] を残したまま、出典表の
+S-06 を S-99 に書き換えて refs_integrity を通す)。詳細は
+[../experiments/2026-09-06-p10-results.md](../experiments/2026-09-06-p10-results.md)
+Finding 3。
+
+**Anthropic model を aider で使うなら**:
+- `--edit-format udiff` を default に
+- prompt で「本文を直す、出典表を書き換えない」等の対称性拘束を明示
+- あるいは opencode に切り替え (§F 追記参照)
 
 ### 実務上のガイド
 

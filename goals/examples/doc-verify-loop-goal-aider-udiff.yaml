@@ -1,0 +1,59 @@
+# P10-C 用: aider + --edit-format udiff で loop-goal gate を通す
+# P7 で SEARCH/REPLACE format が Anthropic model と相性悪かった仮説の検証。
+# udiff は universal diff で汎化性高い期待。
+#
+# 実行:
+#   uv run ralph run goals/examples/doc-verify-loop-goal-aider-udiff.yaml \
+#       --model openrouter/anthropic/claude-haiku-4.5
+
+name: doc-verify-loop-goal-aider-udiff
+description: |
+  aider の --edit-format udiff で loop-goal gate を通す (P10-C 検証)。
+  Anthropic model と SEARCH/REPLACE 不整合の workaround 候補。
+
+input_document: ~/.claude/plugins/cache/dobachi-skills/loop-goal/0.3.0/skills/loop-goal/detectors/fixtures/broken_ref.md
+
+agent:
+  cmd: aider
+  args:
+    - "--yes-always"
+    - "--no-auto-commits"
+    - "--no-git"
+    - "--no-restore-chat-history"
+    - "--chat-history-file"
+    - "/dev/null"
+    - "--edit-format"
+    - "udiff"                     # ★ P10-C 変更点: SEARCH/REPLACE の代わりに udiff
+    - "--message-file"
+    - "/dev/stdin"
+    - "$CURRENT"
+  stdin_prompt: true
+  model: openrouter/openai/gpt-4.1-mini   # --model で上書き想定
+  env: {}
+
+prompt: |
+  Target file: $CURRENT
+  Baseline (DO NOT modify): $BASE
+  Iteration: $ITER / $MAX_ITER
+
+  Previous gate output (findings to fix):
+  $PREV_GATE_OUTPUT
+
+  Instructions:
+    1. Read $CURRENT (aider added it to chat).
+    2. Look at the previous gate output. Each failing detector lists
+       specific line numbers and findings.
+    3. Emit **unified diff** blocks (aider is in udiff mode) to fix
+       ONLY the failing findings. Do not rewrite broadly.
+    4. When done, stop.
+
+gate:
+  script: ~/.claude/plugins/cache/dobachi-skills/loop-goal/0.3.0/skills/loop-goal/gate.sh
+  env: {}
+  timeout_sec: 60
+
+max_iterations: 5
+overall_timeout_sec: 900
+agent_timeout_sec: 300
+
+log_path: logs/p10-results.jsonl

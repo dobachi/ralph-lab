@@ -61,4 +61,4 @@ max_iterations: 5
 overall_timeout_sec: 900
 agent_timeout_sec: 300
 
-log_path: logs/p7-comparison.jsonl
+log_path: logs/p10-results.jsonl

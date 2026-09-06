@@ -146,16 +146,22 @@ metric 抽出に使えるかもしれない)。
 
 ---
 
-## §H. Anthropic model + opencode の SEARCH/REPLACE 生成問題は?
+## §H. Anthropic model + opencode は問題なし (P10-D 実測 ✅)
 
 **aider は Anthropic model で SEARCH/REPLACE format 失敗が実測されている**
 (aider-integration.md §E)。**opencode は built-in file edit tool を使うので
-LLM が特定 format を生成する必要がなく、Anthropic model でも動く可能性が
-高い**。ただし未検証。
+LLM が特定 format を生成する必要がない**。
 
-**BACKLOG**: Anthropic model + opencode + OpenRouter で
-`goals/examples/doc-verify-loop-goal-opencode.yaml` の model を
-`openrouter/anthropic/claude-3.5-haiku` に変えて実行、動作するか確認。
+**P10-D で実測 (2026-09-06)**: opencode + `openrouter/anthropic/claude-haiku-4.5`
+で loop-goal gate を **pass 2 iter, 20.9s**、diff は clean fix
+([S-99]→[S-06] 2 箇所)。
+
+**含意**: **Anthropic model を Ralph loop で使うなら opencode 推奨**。
+- 別 CLI (aider) では `--edit-format udiff` の workaround が必要
+- opencode は tool_use ネイティブで、Anthropic の学習分布と自然に合う
+
+詳細は [../experiments/2026-09-06-p10-results.md](../experiments/2026-09-06-p10-results.md)
+Finding 2。
 
 ---
 
