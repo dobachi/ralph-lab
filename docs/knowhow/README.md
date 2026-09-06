@@ -22,6 +22,8 @@ ralph-lab を実装・運用して得た**再現性のあるノウハウ**を残
   file 編集を自前でやる、fresh-context)。ralph-lab 側の spec 契約と対応
 - [gate-neutrality.md](gate-neutrality.md) — Level C (gate 中立) の実装意味と
   loop-goal / pytest / cargo test 等の複数 gate 対応
+- [gate-design-patterns.md](gate-design-patterns.md) — Goodhart 4 手法を塞ぐ
+  gate 5 check の設計指針。ralph-lab の 7 度実測を体系化
 
 ## 関連
 
