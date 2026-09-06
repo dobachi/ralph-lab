@@ -11,8 +11,8 @@
 
 - [x] opencode CLI との aider 比較 (使い勝手 A/B) — P7 (2026-09-06) 完了
 - [ ] `--edit-format udiff` / `whole` で aider + Anthropic model の SEARCH/REPLACE 失敗が解消するか調査 (docs/knowhow/aider-integration.md §E)
-- [ ] `ralph init` サブコマンドの v1 移植 (agent-loop-lab の core/init.py 相当) — **P8 で着手中**
-- [ ] `ralph check` サブコマンドの v1 移植 (agent-loop-lab の core/check.py 相当) — **P8 で着手中**
+- [x] `ralph init` サブコマンドの v1 移植 — P8 (2026-09-06) 完了
+- [x] `ralph check` サブコマンドの v1 移植 — P8 (2026-09-06) 完了
 - [ ] Windows 対応 (`/dev/stdin` 依存の解消、`--message-file` 系の platform 抽象化)
 - [ ] cost 計算機能 (OpenRouter `/generation` endpoint or agent CLI の cost 出力を parse)
 - [ ] `--parallel` 実装 (multi-model の並列実行、API rate throttle 込み)
@@ -24,16 +24,27 @@
 - [ ] agent CLI の網羅比較 — claude / codex / opencode / aider の 4 種で同じ goal
 - [x] v1 P4 の再現 (「S-99 捏造で pass」現象が v2 でも起きるか) — P7 (2026-09-06) で再現確認済、aider/opencode で追認
 - [ ] gate の複合化 — loop-goal + custom grep で複数 detector を AND
-- [ ] コード領域の gate 検証 (pytest / cargo / eslint) を実 project で回す
+- [x] コード領域の gate 検証 (pytest) — P9 (2026-09-06) 実施、5 iter で pass せず。gpt-4.1-mini の Goodhart 型 hack (`return 5`) を実測。cargo / eslint は未実施
+- [ ] P9 の続き: 強い model (claude-3.7-sonnet, sonnet-4-5) で code-fix-pytest が pass するか
 - [ ] Anthropic model + opencode の検証 (aider の Anthropic 失敗と対照、P7 で未実施)
 - [ ] n=5 くらい回して非決定性の分布測定 (S-99 捏造 vs clean fix の出現率)
 - [ ] opencode の chat history 相当が cwd に貯まるか長期実験
 
 ## ドキュメント / ノウハウ
 
-- [ ] docs/knowhow/agent-cli-<cli>.md を CLI ごとに追加 (opencode, codex, claude CLI) — **P8 で opencode 分に着手**
+- [x] docs/knowhow/agent-cli-opencode.md — P8 (2026-09-06) 完了。codex / claude CLI 分は残
+- [ ] docs/knowhow/agent-cli-<cli>.md 残: codex CLI, claude CLI
 - [ ] docs/knowhow/prompt-patterns.md — Ralph 系で通りやすい prompt 型の抽出
-- [ ] README に「Quickstart 3 通り」を明示 (claude 直、aider + OpenRouter、opencode + OpenRouter) — **P8 で着手中**
+- [x] README に「Quickstart 3 通り」を明示 — P8 (2026-09-06) 完了
+
+## Framework 側の設計課題 (P9 で顕在化)
+
+- [ ] workspace の dir 対応 — 現状 input_document は 1 file のみコピー。
+  code 領域 (tests/ が周辺に要る) では gate.sh 側で tempdir 組み直しが
+  workaround。長期には workspace 自体を dir ベースに拡張したい
+- [ ] predict-first の徹底 — 実験前に doc に予測を書く運用。P9 で予測を
+  書かずに実行 → 「iter 5 で pass しない」ことが決まってから explanation
+  を書く形になった。loop-goal HANDOVER 精神に反する
 
 ## 検討 (実装前に判断する)
 
@@ -46,11 +57,13 @@
 
 ---
 
-## 次アクション案 (2026-09-06 検討)
+## 次アクション案 (2026-09-06 検討) — 履歴保存
+
+**現在**: P8 (A: user 触りやすく) + P9 (B: 適用範囲実証) 完了。
 
 P7 (aider vs opencode 比較) 完了時点で、次にやる価値のある方向を 4 分類:
 
-### A. user が触れる状態にする (低コスト、価値高い) — **選択済 (P8 で実施中)**
+### A. user が触れる状態にする (低コスト、価値高い) — **P8 (2026-09-06) 完了**
 
 前提: ralph-lab は動くが他人 (or 未来の自分) が使い始める摩擦が高い。
 
@@ -61,18 +74,14 @@ P7 (aider vs opencode 比較) 完了時点で、次にやる価値のある方�
 **選択理由**: 動く framework ができたので使い始めやすくするのが第一。
 低コストで value が高い。他方向を先にやると「動くが使いにくい」状態が残る。
 
-### B. framework の適用範囲を実証 (中コスト、価値高い)
+### B. framework の適用範囲を実証 (中コスト、価値高い) — **P9 (2026-09-06) 完了**
 
-前提: 現状 example は全て文章検証 (loop-goal)。「Ralph は code にも文章にも
-使える」の実測が欠けている。
-
-- pytest gate の mini example — わざと fail する Python test を含む small
-  project、aider が test を通すまで実装を fix する
-- cargo test / eslint / grep-based gate の example も
+- [x] pytest gate の mini example — experiments/code-fix-pytest/。 実測: aider +
+  gpt-4.1-mini で 5 iter pass せず (Goodhart 型 hack を観察)
+- [ ] cargo test / eslint / grep-based gate の example
+- 副産物: workspace 1-file 制約が code 用途で顕在化 (→ 設計課題節へ)
 
 これで README の「gate は任意 bash script」が具体的に見える。
-
-**次にやるならこれ**。P8 (A) 完了後の第一候補。
 
 ### C. 未解決の技術疑問を解く (中コスト、docs 価値高い)
 
