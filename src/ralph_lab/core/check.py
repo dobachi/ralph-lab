@@ -151,6 +151,17 @@ def check_spec(spec: GoalSpec) -> list[SpecIssue]:
                 "error", f"gate.delegate_to[{i}].timeout_sec",
                 f"must be > 0 (got {d.timeout_sec})",
             ))
+        if d.retries < 0:
+            issues.append(SpecIssue(
+                "error", f"gate.delegate_to[{i}].retries",
+                f"must be >= 0 (got {d.retries})",
+            ))
+        if d.retries > 5:
+            issues.append(SpecIssue(
+                "warning", f"gate.delegate_to[{i}].retries",
+                f"retries={d.retries} is high — cost multiplier is {d.retries + 1}x. "
+                "Consider whether Layer C (post_evaluation) fits better.",
+            ))
     if spec.gate.aggregate not in ("all_pass", "any_pass"):
         issues.append(SpecIssue(
             "warning", "gate.aggregate",

@@ -43,6 +43,11 @@ class DelegationResult:
     error: str | None = None
     """subprocess 起動失敗等の error message"""
 
+    attempts: int = 1
+    """P20: 実際に試行した回数 (retries=0 なら 1、retries=N で any-pass 短絡した
+    場合は 1〜N+1)。duration_ms は最後の試行のみを表す — 累計 duration は
+    JSONL の分析側で計算"""
+
 
 @dataclass(frozen=True)
 class PostEvaluationResult:
@@ -81,16 +86,13 @@ def _render_prompt(template: str, current: Path, base: Path | None) -> str:
     return result
 
 
-async def run_delegation(
+async def _run_delegation_once(
     call: DelegationCall,
     current: Path,
     base: Path | None,
     workdir: Path,
 ) -> DelegationResult:
-    """1 件の委譲を subprocess で実行、判定結果を返す。
-
-    Never raises: エラーは result.error に格納。gate 全体を壊さない。
-    """
+    """1 件の委譲を 1 回だけ subprocess で実行。retry ラッパーの内側。"""
     start = time.monotonic()
     prompt = _render_prompt(call.prompt, current, base)
 
@@ -161,6 +163,44 @@ async def run_delegation(
         duration_ms=duration_ms,
         timed_out=timed_out,
     )
+
+
+async def run_delegation(
+    call: DelegationCall,
+    current: Path,
+    base: Path | None,
+    workdir: Path,
+) -> DelegationResult:
+    """1 件の委譲を実行 (retries を含む)。P20 で retry ロジックを追加。
+
+    Never raises: エラーは result.error に格納。gate 全体を壊さない。
+
+    Retry rule (P20):
+      - retries=0: 1 回だけ実行 (現行動作)
+      - retries=N: 最大 N+1 回試行、any-pass 短絡 (PASS を返した時点で終了)
+      - 再試行条件: passed=False かつ error is None
+        (launch エラーは再試行しない — cmd not found は retry で解決しない)
+    """
+    result = await _run_delegation_once(call, current, base, workdir)
+    if result.passed or call.retries <= 0:
+        # 現行動作: 1 発 pass or retries 未設定 = そのまま返す
+        return DelegationResult(**{**result.__dict__, "attempts": 1})
+
+    if result.error is not None:
+        # Launch 失敗等 — 再試行しても解決しない
+        return DelegationResult(**{**result.__dict__, "attempts": 1})
+
+    # Retry ループ: attempt 2 .. retries+1
+    for attempt_num in range(2, call.retries + 2):
+        result = await _run_delegation_once(call, current, base, workdir)
+        if result.passed:
+            return DelegationResult(**{**result.__dict__, "attempts": attempt_num})
+        if result.error is not None:
+            # Launch 失敗が途中で起きたら停止
+            return DelegationResult(**{**result.__dict__, "attempts": attempt_num})
+
+    # 全 attempt が passed=False で終了 — 最後の結果を返す
+    return DelegationResult(**{**result.__dict__, "attempts": call.retries + 1})
 
 
 async def run_all_delegations(

@@ -86,6 +86,12 @@ class DelegationCall:
     stdin_prompt: bool = True
     """True なら prompt を stdin 経由、False なら args 末尾に append"""
 
+    retries: int = 0
+    """P20: LLM 非決定性回避。失敗時に n 回まで再試行 (any-pass 短絡)。
+    - 0 (default): 単発実行、現行動作
+    - N: 最大 N+1 回試行、いずれか PASS で終了
+    - 再試行条件: passed=False かつ error is None (launch エラーは再試行しない)"""
+
 
 @dataclass(frozen=True)
 class GateConfig:
@@ -226,6 +232,7 @@ class GoalSpec:
                 fail_pattern=str(d.get("fail_pattern", r"^FAIL")),
                 timeout_sec=float(d.get("timeout_sec", 300.0)),
                 stdin_prompt=bool(d.get("stdin_prompt", True)),
+                retries=int(d.get("retries", 0)),
             ))
 
         gate = GateConfig(

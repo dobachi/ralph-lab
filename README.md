@@ -150,8 +150,14 @@ gate:
       fail_pattern: '^FAIL'
       stdin_prompt: true
       timeout_sec: 180
+      retries: 2  # 任意 (P20): LLM 非決定性回避、any-pass 短絡
   aggregate: all_pass  # or any_pass
 ```
+
+**Retry セマンティクス**: `retries: N` は最大 N+1 回試行、いずれかが
+PASS で短絡終了。launch エラー (cmd not found 等) は 1 回で終了 (再試行
+不能)。cost multiplier は最悪 N+1 倍。P16 で観察した Layer B (LLM skill
+subprocess) の非決定性への対策。
 
 **方式 C: `spec.yaml` の `post_evaluation`** — Layer C (LLM-as-judge)。
 Ralph pass 後 **1 回だけ** 走る post-hoc 判定:

@@ -78,7 +78,7 @@ model 側の抽象特性。gate 側の強化が根本策:
 - [x] **P16 実測 (2026-09-06)**: 異 provider judge (gpt-4o via OpenRouter) は content-shaped fabrication を検出できた (post-hoc direct test)。Ralph run 経由では Layer B (doc-review) が非決定的に FAIL したため Layer C まで到達せず、**Layer B は n=1 で不安定**という副次的 finding。詳細は `docs/experiments/2026-09-06-p16-results.md`
 - 新規追加: `scripts/judge-openrouter.py` (stdlib のみ OpenRouter API wrapper) + `delegation._render_prompt` に `{file_content}` / `{base_content}` placeholder (framework 拡張、file read tool なし judge 対応)
 - [x] **P19 (framework 改善)**: `spec.post_evaluation.run_always: bool` 追加。True なら max_iter 時にも judge 実行、PASS で status=judge_passed (loop を rescue)、FAIL で status=max_iterations のまま。6/6 branch unit test 通過。Backward-compat 保持 (default False)。doc-verify-delegating-p16.yaml も run_always=true に更新済
-- [ ] **P20 候補** (framework 改善): `delegate_to[N].retries` の実装。Layer B の非決定性回避 (n 回実行、多数決 or all_pass)
+- [x] **P20 (framework 改善)**: `delegate_to[N].retries: int = 0` を実装。any-pass 短絡 (最初に PASS 返した時点で終了)、launch error は再試行しない、DelegationResult.attempts で試行回数を記録。5/5 sanity test 通過 (single-shot / short-circuit / all-retries-used / all-fail / launch-error)。check.py で retries<0 error、retries>5 warning
 - [ ] **P21 候補**: gpt-4o-mini で judge 実測 ($0.01/回)、cheap tier でも検出可能か
 - [x] **P17 (framework 観測性改善)**: JSONL log に `stdout_head` / `stderr_head` (先頭 200 char + `...[TRUNCATED]` 印) を追加 — agent / gate / delegations / post_evaluation の 4 種全部。判定理由 (PASS/FAIL の 1 行) を post-hoc に分析可能に。2026-09-06 完了、mock test 4/4 pass
 - [ ] **P18 候補**: fact-checker prompt 改訂 (「URL なし = FAIL」)、Layer B 再実測

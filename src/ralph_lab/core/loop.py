@@ -198,6 +198,7 @@ def _log_iteration(
                 "error": d.error,
                 "stdout_head": _head(d.stdout),
                 "stderr_head": _head(d.stderr),
+                "attempts": d.attempts,
             }
             for d in record.delegations
         ],
