@@ -51,16 +51,37 @@ class Workspace:
         cls,
         input_document: Path | str,
         root: Path | str | None = None,
+        baseline_document: Path | str | None = None,
     ) -> "Workspace":
-        """`input_document` を BASE と current にコピーして workspace を作る。
+        """input を workspace にコピー。
 
         Args:
-            input_document: コピー元ファイル
+            input_document: agent が編集する初期状態 (current にコピー)
             root: 指定なしなら tempfile.mkdtemp で自動作成
+            baseline_document: P13 finding 対応 — BASE (monotonicity 基準) の source。
+              None なら input_document を BASE にもコピー (現行動作、backward-compat)。
+              指定時は input と BASE が別ファイルになる = 「buggy input を correct
+              baseline に照らして直す」ワークフロー対応
+
+        現行 (backward-compat): baseline_document=None → BASE = current の初期
+        コピー = input_document 自体。単純ケース。
+
+        分離運用: baseline_document="baseline.md", input_document="buggy.md" →
+        - BASE = baseline.md (correct、監視対象)
+        - current = buggy.md の初期状態 → agent が baseline へ寄せて直す
+        - Layer A monotonicity は「BASE に近づけろ」の direction
         """
         src = Path(input_document).expanduser().resolve()
         if not src.is_file():
             raise FileNotFoundError(f"input_document not found: {src}")
+
+        base_src = (
+            Path(baseline_document).expanduser().resolve()
+            if baseline_document
+            else src
+        )
+        if not base_src.is_file():
+            raise FileNotFoundError(f"baseline_document not found: {base_src}")
 
         if root is None:
             root_path = Path(tempfile.mkdtemp(prefix="ralph-lab-"))
@@ -72,8 +93,8 @@ class Workspace:
         base = root_path / f"BASE{suffix}"
         current = root_path / f"current{suffix}"
 
-        shutil.copy2(src, base)
-        shutil.copy2(src, current)
+        shutil.copy2(base_src, base)      # BASE ← baseline_document (or input_document)
+        shutil.copy2(src, current)         # current ← input_document
 
         base.chmod(stat.S_IRUSR | stat.S_IRGRP | stat.S_IROTH)
 

@@ -59,6 +59,11 @@ class IterationRecord:
     base_tamper_message: str = ""
     """tamper 検出時のサマリ (workspace.verify_and_restore_base() の返す文字列)"""
 
+    current_unchanged: bool = False
+    """silent failure detection: agent は exit 0 で戻ったが current.md が
+    前 iter から変わっていない場合 True。JSONL log に記録され、複数 iter で
+    連続すると agent の異常 (context/tool 誤設定、prompt 誤解等) の signal に。"""
+
 
 @dataclass
 class RalphResult:
@@ -205,6 +210,7 @@ def _log_iteration(
         "overall_gate_passed": record.overall_gate_passed,
         "base_tampered": record.base_tampered,
         "base_tamper_message": record.base_tamper_message,
+        "current_unchanged": record.current_unchanged,
         "prompt_size": record.prompt_size,
         "feedback_used_size": len(record.feedback_used) if record.feedback_used else 0,
     }
@@ -255,13 +261,19 @@ async def run_ralph_loop(
         + post_evaluation)
     """
     start = time.monotonic()
-    workspace = Workspace.prepare(spec.input_document, root=workspace_root)
+    workspace = Workspace.prepare(
+        spec.input_document,
+        root=workspace_root,
+        baseline_document=spec.baseline_document,
+    )
     records: list[IterationRecord] = []
     feedback: str | None = None
     status = "max_iterations"
+    prev_current_hash: str | None = None  # silent failure detection
 
     async def _loop() -> None:
-        nonlocal feedback, status
+        nonlocal feedback, status, prev_current_hash
+        import hashlib as _hashlib
         for i in range(spec.max_iterations):
             # 1. Render PROMPT + agent.args (both may contain placeholders)
             prompt = _render_prompt(
@@ -280,7 +292,19 @@ async def run_ralph_loop(
                 timeout_sec=spec.agent_timeout_sec,
             )
 
-            # 3. Verify BASE integrity (P13-3, Layer 0 = framework tamper 対策)
+            # 3a. Silent failure detection: current.md unchanged despite agent exit 0
+            try:
+                curr_hash = _hashlib.sha256(workspace.current.read_bytes()).hexdigest()
+            except FileNotFoundError:
+                curr_hash = ""
+            current_unchanged = (
+                prev_current_hash is not None
+                and curr_hash == prev_current_hash
+                and agent_result.exit_code == 0
+            )
+            prev_current_hash = curr_hash
+
+            # 3b. Verify BASE integrity (P13-3, Layer 0 = framework tamper 対策)
             base_ok, tamper_msg = workspace.verify_and_restore_base()
 
             # 4. Run syntactic gate (BASE は復元済なので通常通り)
@@ -314,6 +338,7 @@ async def run_ralph_loop(
                 overall_gate_passed=overall_passed,
                 base_tampered=not base_ok,
                 base_tamper_message=tamper_msg,
+                current_unchanged=current_unchanged,
             )
             records.append(record)
             _log_iteration(spec.log_path, spec, record)

@@ -43,6 +43,20 @@ def check_spec(spec: GoalSpec) -> list[SpecIssue]:
             f"file not found: {spec.input_document}",
         ))
 
+    # baseline_document (optional, P13 finding)
+    if spec.baseline_document is not None:
+        if not spec.baseline_document.is_file():
+            issues.append(SpecIssue(
+                "error", "baseline_document",
+                f"file not found: {spec.baseline_document}",
+            ))
+        elif spec.baseline_document == spec.input_document:
+            issues.append(SpecIssue(
+                "info", "baseline_document",
+                "baseline_document == input_document — the field is redundant; "
+                "omit it for the same effect.",
+            ))
+
     # gate.script
     if not spec.gate.script.is_file():
         issues.append(SpecIssue(
@@ -118,6 +132,31 @@ def check_spec(spec: GoalSpec) -> list[SpecIssue]:
         issues.append(SpecIssue(
             "warning", "log_path",
             f"log parent dir not writable: {log_parent}",
+        ))
+
+    # OPENROUTER_API_KEY (aider/opencode 使用時に必要)
+    # agent.cmd が opencode / aider の場合、または model に openrouter/ prefix が
+    # ある場合、OPENROUTER_API_KEY を推定的に要求。判定 miss は許容 (warning)。
+    needs_or = (
+        spec.agent.cmd in ("aider", "opencode")
+        or (spec.agent.model and spec.agent.model.startswith("openrouter/"))
+    )
+    if needs_or and not os.environ.get("OPENROUTER_API_KEY"):
+        issues.append(SpecIssue(
+            "warning", "env",
+            "OPENROUTER_API_KEY not set. aider/opencode + OpenRouter path "
+            "requires this. Load .env: `set -a && source .env && set +a` "
+            "or configure via CLI-specific mechanism.",
+        ))
+    # 委譲 / post_evaluation が judge-openrouter の場合も
+    judge_uses_or = any(
+        d.cmd == "judge-openrouter" for d in spec.gate.delegate_to
+    ) or (spec.post_evaluation and spec.post_evaluation.cmd == "judge-openrouter")
+    if judge_uses_or and not os.environ.get("OPENROUTER_API_KEY"):
+        issues.append(SpecIssue(
+            "warning", "env",
+            "OPENROUTER_API_KEY not set but judge-openrouter is used in "
+            "delegate_to/post_evaluation.",
         ))
 
     # model prefix (OpenRouter 前提の情報レベル)

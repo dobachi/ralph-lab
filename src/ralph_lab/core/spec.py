@@ -176,6 +176,9 @@ class GoalSpec:
     name: str
     description: str
     input_document: Path
+    """agent が編集する初期状態 (workspace の current にコピー)。
+    baseline_document 未指定なら BASE (monotonicity 基準) にも同じものを使う。"""
+
     agent: AgentSpec
     prompt: str
     """PROMPT.md 相当。Ralph 原則で毎回丸ごと agent に渡す。$CURRENT, $BASE,
@@ -191,6 +194,13 @@ class GoalSpec:
 
     post_evaluation: PostEvaluationConfig | None = None
     """Ralph pass 後の judge 呼び出し (Layer C)。None なら post_evaluation なし"""
+
+    baseline_document: Path | None = None
+    """P13 finding 対応: 「correct baseline」を別ファイルにする場合の指定。
+    None (default): BASE = input_document のコピー (backward-compat、単純ケース)
+    指定時: BASE = baseline_document、current = input_document (別々の source)。
+    「buggy 状態から correct 状態に近づける」ワークフローで monotonicity check の
+    向きを明確化。"""
 
     @classmethod
     def from_yaml(cls, path: Path | str) -> "GoalSpec":
@@ -278,6 +288,11 @@ class GoalSpec:
                 run_always=bool(post_eval_raw.get("run_always", False)),
             )
 
+        baseline_raw = data.get("baseline_document")
+        baseline_document: Path | None = None
+        if baseline_raw is not None:
+            baseline_document = _resolve_path(baseline_raw, base_dir)
+
         return cls(
             name=str(data["name"]),
             description=str(data["description"]),
@@ -290,6 +305,7 @@ class GoalSpec:
             agent_timeout_sec=float(data.get("agent_timeout_sec", 600.0)),
             log_path=_resolve_path(str(data.get("log_path", "logs/ralph-runs.jsonl")), base_dir),
             post_evaluation=post_evaluation,
+            baseline_document=baseline_document,
         )
 
 
