@@ -162,6 +162,18 @@ def check_spec(spec: GoalSpec) -> list[SpecIssue]:
                 f"retries={d.retries} is high — cost multiplier is {d.retries + 1}x. "
                 "Consider whether Layer C (post_evaluation) fits better.",
             ))
+        if d.retry_aggregate not in ("any_pass", "all_pass", "majority"):
+            issues.append(SpecIssue(
+                "warning", f"gate.delegate_to[{i}].retry_aggregate",
+                f"unknown retry_aggregate={d.retry_aggregate!r}. "
+                "Known: any_pass, all_pass, majority. Unknown = falls back to single-shot.",
+            ))
+        if d.retries > 0 and d.retry_aggregate == "majority" and (d.retries + 1) % 2 == 0:
+            issues.append(SpecIssue(
+                "info", f"gate.delegate_to[{i}].retries",
+                f"retries={d.retries} + retry_aggregate=majority: N+1={d.retries+1} is even, "
+                "ties fall to FAIL. Consider odd N+1 (retries=2, 4 …) for clean majority.",
+            ))
     if spec.gate.aggregate not in ("all_pass", "any_pass"):
         issues.append(SpecIssue(
             "warning", "gate.aggregate",

@@ -291,6 +291,27 @@ Claude CLI (`claude -p`) は file read tool を持つが、OpenRouter 直叩き 
 
 ---
 
+## Retry の方向: skill の pathology に合わせる (P26)
+
+Layer B skill には**判定分布の偏り方向**があり、`retry_aggregate` を
+これに合わせる:
+
+| Skill 種類 | 分布方向 | 例 | 推奨 retry_aggregate |
+|---|---|---|---|
+| **FAIL-happy** | 稀な PASS が信号 | fact-checker (URL/DOI 明示 rule) | `any_pass` (1 shot PASS で短絡) |
+| **PASS-happy** | 稀な FAIL が信号 | doc-review (broad prompt) | `all_pass` (1 shot FAIL で短絡) |
+| **偏り不明** | 分布未測定 | 新規 skill | `majority` (中庸、cost 最大) |
+
+**根拠 (P24 実測)**: doc-review を同 input に n=6 呼び出し → 5/6 PASS,
+1/6 FAIL。稀な FAIL は substantive で正しい semantic finding だった。
+`any_pass` retries (0.17^3 = 0.5%) は稀な信号を suppress する方向に働く。
+`all_pass` なら retries でも 1 FAIL で catch できる。
+
+**使い分けの目安**:
+- 新規 skill: まず n=6-10 で分布サンプリング (P24 参照)
+- 分布が偏っているなら pathology 方向に応じた mode
+- 分布が真の 50/50 なら `majority` が理論最良 (信頼度上昇)
+
 ## 実測から抽出した 4 pathology の対応表
 
 | Pathology | 観察実験 | 対処 pattern |

@@ -171,36 +171,92 @@ async def run_delegation(
     base: Path | None,
     workdir: Path,
 ) -> DelegationResult:
-    """1 件の委譲を実行 (retries を含む)。P20 で retry ロジックを追加。
+    """1 件の委譲を実行 (retries + retry_aggregate)。P20 + P26 で追加/拡張。
 
     Never raises: エラーは result.error に格納。gate 全体を壊さない。
 
-    Retry rule (P20):
+    Retry rules:
       - retries=0: 1 回だけ実行 (現行動作)
-      - retries=N: 最大 N+1 回試行、any-pass 短絡 (PASS を返した時点で終了)
-      - 再試行条件: passed=False かつ error is None
-        (launch エラーは再試行しない — cmd not found は retry で解決しない)
+      - retries=N (retry_aggregate="any_pass"): 最大 N+1 回、1 shot PASS で短絡
+      - retries=N (retry_aggregate="all_pass"): 最大 N+1 回、1 shot FAIL で短絡
+      - retries=N (retry_aggregate="majority"): 全 N+1 回実行、PASS 過半で PASS
+      - launch エラー (error is None ではない) は即停止
+
+    最終結果の attempts は「実際に走った attempt 数」、passed は集約結果、
+    stdout/stderr/duration_ms は「最後の attempt」のもの (log の可読性重視)。
     """
+    # First attempt
     result = await _run_delegation_once(call, current, base, workdir)
-    if result.passed or call.retries <= 0:
-        # 現行動作: 1 発 pass or retries 未設定 = そのまま返す
+
+    # No retry: single-shot behavior (backward compat)
+    if call.retries <= 0:
         return DelegationResult(**{**result.__dict__, "attempts": 1})
 
+    # Launch error: no retry regardless of aggregate mode
     if result.error is not None:
-        # Launch 失敗等 — 再試行しても解決しない
         return DelegationResult(**{**result.__dict__, "attempts": 1})
 
-    # Retry ループ: attempt 2 .. retries+1
-    for attempt_num in range(2, call.retries + 2):
-        result = await _run_delegation_once(call, current, base, workdir)
-        if result.passed:
-            return DelegationResult(**{**result.__dict__, "attempts": attempt_num})
-        if result.error is not None:
-            # Launch 失敗が途中で起きたら停止
-            return DelegationResult(**{**result.__dict__, "attempts": attempt_num})
+    mode = call.retry_aggregate
+    max_attempts = call.retries + 1
 
-    # 全 attempt が passed=False で終了 — 最後の結果を返す
-    return DelegationResult(**{**result.__dict__, "attempts": call.retries + 1})
+    if mode == "any_pass":
+        # Short-circuit on first PASS. First attempt already tried.
+        if result.passed:
+            return DelegationResult(**{**result.__dict__, "attempts": 1})
+        for attempt_num in range(2, max_attempts + 1):
+            result = await _run_delegation_once(call, current, base, workdir)
+            if result.passed:
+                return DelegationResult(**{**result.__dict__, "attempts": attempt_num})
+            if result.error is not None:
+                return DelegationResult(**{**result.__dict__, "attempts": attempt_num})
+        # All FAIL — return last
+        return DelegationResult(**{**result.__dict__, "attempts": max_attempts})
+
+    if mode == "all_pass":
+        # Short-circuit on first FAIL. First attempt already tried.
+        if not result.passed:
+            return DelegationResult(**{**result.__dict__, "attempts": 1})
+        for attempt_num in range(2, max_attempts + 1):
+            result = await _run_delegation_once(call, current, base, workdir)
+            if not result.passed:
+                return DelegationResult(**{**result.__dict__, "attempts": attempt_num})
+            if result.error is not None:
+                return DelegationResult(**{**result.__dict__, "attempts": attempt_num})
+        # All PASS — return last (which is passed=True)
+        return DelegationResult(**{**result.__dict__, "attempts": max_attempts})
+
+    if mode == "majority":
+        # Run all N+1 attempts, count PASS
+        pass_count = 1 if result.passed else 0
+        last_result = result
+        for _ in range(2, max_attempts + 1):
+            attempt = await _run_delegation_once(call, current, base, workdir)
+            if attempt.passed:
+                pass_count += 1
+            last_result = attempt
+            if attempt.error is not None:
+                # Error in the middle — abort majority, use error result
+                return DelegationResult(**{**attempt.__dict__, "attempts": _ - 1 if isinstance(_, int) else max_attempts})
+        # PASS if strict majority (>N+1 / 2)
+        threshold = max_attempts / 2
+        majority_pass = pass_count > threshold
+        return DelegationResult(
+            **{
+                **last_result.__dict__,
+                "passed": majority_pass,
+                "attempts": max_attempts,
+            }
+        )
+
+    # Unknown mode: fail-conservative (treat as any_pass so single-shot pass survives)
+    return DelegationResult(
+        **{
+            **result.__dict__,
+            "attempts": 1,
+            "error": (result.error or "")
+            + f" [unknown retry_aggregate={mode!r}, treating as single-shot]",
+        }
+    )
 
 
 async def run_all_delegations(

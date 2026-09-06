@@ -85,7 +85,7 @@ model 側の抽象特性。gate 側の強化が根本策:
 - [x] **P22 実測 (2026-09-06)**: retries=2 infrastructure は正常動作 (`attempts=3` 記録) だが、本 case では **非決定性は bottleneck ではなかった** (fact-checker は 3 shot 全部 FAIL で決定的)。副次的に **agent の削除 over-reaction** を新観察 (`[^1]:` def を削除)。詳細は `docs/experiments/2026-09-06-p22-results.md`
 - [x] **P23 (prompt-patterns knowhow)**: `docs/knowhow/prompt-patterns.md` 新規、P15/P16/P18/P22 の 4 実験から 4 pattern 抽出 — delegation prompt (狭く specific)、agent prompt (削除禁止 + clean fix hint)、gate feedback (どう直すかを明示)、post_evaluation (Goodhart 4 種 enumerate)
 - [x] **P24 実測 (2026-09-07)**: doc-review skill を同 input に n=6 直接呼び出し、**5/6 PASS, 1/6 FAIL = 83%/17% 分布**を実測。稀な FAIL は substantive で正しい semantic finding。**any-pass retries は false negative を増やす方向**、doc-review のような PASS-happy skill には逆方向 (`all_pass` / `majority`) が必要と判明。詳細は `docs/experiments/2026-09-07-p24-results.md`
-- [ ] **P26 候補**: `retry_aggregate: str = "any_pass" | "all_pass" | "majority"` を DelegationCall に実装。skill の判定 pathology 方向に応じた選択可能に
+- [x] **P26 (framework)**: `DelegationCall.retry_aggregate: str = "any_pass"` を実装。any_pass (default、FAIL-happy skill 向け) / all_pass (PASS-happy skill 向け、稀な FAIL 尊重) / majority (中庸)。short-circuit 挙動を mode 別に実装、12/12 unit test pass、check.py で unknown mode / even N+1 majority 警告。README + prompt-patterns.md で使い分けを解説
 - [ ] **P27 候補**: 別 skill (verify-content 等) で分布測定、「skill ごとの pathology map」を作る
 - [ ] **P25 候補**: agent prompt Pattern 2 (削除禁止 + clean fix hint) の実測、削除 over-reaction が緩和されるか
 - [ ] gate feedback の表現力改善 (「[^1] が消えている」→「削除された参照を復元せよ」等)

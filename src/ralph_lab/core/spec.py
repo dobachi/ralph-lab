@@ -87,10 +87,21 @@ class DelegationCall:
     """True なら prompt を stdin 経由、False なら args 末尾に append"""
 
     retries: int = 0
-    """P20: LLM 非決定性回避。失敗時に n 回まで再試行 (any-pass 短絡)。
+    """P20: LLM 非決定性回避。追加試行回数 (retry_aggregate で aggregation 制御)。
     - 0 (default): 単発実行、現行動作
-    - N: 最大 N+1 回試行、いずれか PASS で終了
-    - 再試行条件: passed=False かつ error is None (launch エラーは再試行しない)"""
+    - N: 最大 N+1 回試行、retry_aggregate で集約
+    - 再試行条件: error is None (launch エラーは再試行しない)"""
+
+    retry_aggregate: str = "any_pass"
+    """P26: retries > 0 時の集約ルール。skill の判定 pathology 方向に応じて選択。
+    - "any_pass" (default): FAIL-happy skill 向け (fact-checker 等)。1 shot PASS で
+      短絡、稀な PASS を尊重、稀な FAIL (真の failure signal) を suppress しない
+      形態は「PASS を集めきる」
+    - "all_pass": PASS-happy skill 向け (doc-review 等、P24 実測)。1 shot FAIL で
+      短絡、稀な FAIL (真の signal) を尊重、稀な PASS を suppress する形態は
+      「FAIL を検出しきる」
+    - "majority": 中庸。全 N+1 attempts を実行、PASS 過半で PASS 判定
+      (short-circuit なし、cost 最大)"""
 
 
 @dataclass(frozen=True)
@@ -233,6 +244,7 @@ class GoalSpec:
                 timeout_sec=float(d.get("timeout_sec", 300.0)),
                 stdin_prompt=bool(d.get("stdin_prompt", True)),
                 retries=int(d.get("retries", 0)),
+                retry_aggregate=str(d.get("retry_aggregate", "any_pass")),
             ))
 
         gate = GateConfig(

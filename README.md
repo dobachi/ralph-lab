@@ -154,10 +154,20 @@ gate:
   aggregate: all_pass  # or any_pass
 ```
 
-**Retry セマンティクス**: `retries: N` は最大 N+1 回試行、いずれかが
-PASS で短絡終了。launch エラー (cmd not found 等) は 1 回で終了 (再試行
-不能)。cost multiplier は最悪 N+1 倍。P16 で観察した Layer B (LLM skill
-subprocess) の非決定性への対策。
+**Retry セマンティクス**: `retries: N` は最大 N+1 回試行。集約は
+`retry_aggregate` で選択 (P26):
+
+- **`any_pass`** (default): 1 shot PASS で短絡。FAIL-happy skill 向け
+  (fact-checker 等)。稀な PASS を尊重。
+- **`all_pass`**: 1 shot FAIL で短絡、全 shot PASS 必要。**PASS-happy skill
+  向け** (doc-review 等、P24 で pathology 判明)。稀な FAIL を尊重。
+- **`majority`**: 全 N+1 shot 実行、PASS 過半で PASS。中庸、cost 最大。
+
+launch エラー (cmd not found 等) は 1 回で終了 (再試行不能)。cost multiplier は
+最悪 N+1 倍。skill の判定 pathology 方向 (FAIL-happy vs PASS-happy) に
+応じて選択すること。詳細は
+[docs/experiments/2026-09-07-p24-results.md](docs/experiments/2026-09-07-p24-results.md)
+参照。
 
 **方式 C: `spec.yaml` の `post_evaluation`** — Layer C (LLM-as-judge)。
 Ralph pass 後 **1 回だけ** 走る post-hoc 判定:
