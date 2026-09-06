@@ -16,7 +16,7 @@
 - [ ] Windows 対応 (`/dev/stdin` 依存の解消、`--message-file` 系の platform 抽象化)
 - [ ] cost 計算機能 (OpenRouter `/generation` endpoint or agent CLI の cost 出力を parse)
 - [ ] `--parallel` 実装 (multi-model の並列実行、API rate throttle 込み)
-- [ ] silent failure 検出 (v1 agent-loop-lab で発見: subprocess が exit 0 で戻るが何もしていない状態) の v2 での再現確認と対策
+- [x] silent failure 検出 (2026-09-07): IterationRecord.current_unchanged を追加 (SHA-256 が前 iter と同じで agent exit 0 = silent fail 疑い、JSONL に記録)
 
 ## 実験 / 検証
 
@@ -73,7 +73,7 @@ model 側の抽象特性。gate 側の強化が根本策:
 - [x] 8 度目 Goodhart 実測 — P13-2 (2026-09-06) 完了。当初「新種 BASE 書換」と結論したが、debug trace で誤読と判明。**実際は content-shaped citation dummy 追加 (捏造型の変種)**。訂正は `docs/experiments/2026-09-06-p13-CORRECTION.md`
 - [x] **P13-3 (defense-in-depth)**: `Workspace.verify_and_restore_base()` を追加 — sha256 verify + tamper 時 bytes 復元。実測での起動事例は現時点なし (P13-2 誤読が動機だったが、`chmod 444` owner-bypass の事実は残る)。3/3 sanity test 通過
 - [x] P13-4 (実測): P13-3 導入後の runtime 検証も同時に完了。base_tampered は False で終わり = 想定通り
-- [ ] **ralph-lab の spec 設計改善**: `input_document` が「buggy state (基準)」なのか「correct baseline」なのかが曖昧。docs で明示化 or `baseline_document` / `input_document` を別 field 化を検討 (P13 副産物 finding)
+- [x] **ralph-lab の spec 設計改善** (2026-09-07): `baseline_document: <path>` を optional field 追加。指定時 BASE と current が別 source (buggy → correct workflow 対応)、未指定は現行動作。3/3 test 通過
 - [x] 委譲機構の実 API 実測 — P15 (2026-09-06) 完了。**Layer C (LLM-as-judge) が 8 度目 content-shaped dummy を検出**。Layer B (fact-checker + doc-review) は素通り (fact-checker は URL なし定義を対象外にする穴、doc-review は「実在概念に見える不完全 citation」を検出できず)。cost 実測 $0.21 (予測 $1.00 の 1/5)。詳細は `docs/experiments/2026-09-06-p15-results.md`
 - [x] **P16 実測 (2026-09-06)**: 異 provider judge (gpt-4o via OpenRouter) は content-shaped fabrication を検出できた (post-hoc direct test)。Ralph run 経由では Layer B (doc-review) が非決定的に FAIL したため Layer C まで到達せず、**Layer B は n=1 で不安定**という副次的 finding。詳細は `docs/experiments/2026-09-06-p16-results.md`
 - 新規追加: `scripts/judge-openrouter.py` (stdlib のみ OpenRouter API wrapper) + `delegation._render_prompt` に `{file_content}` / `{base_content}` placeholder (framework 拡張、file read tool なし judge 対応)
@@ -88,23 +88,27 @@ model 側の抽象特性。gate 側の強化が根本策:
 - [x] **P26 (framework)**: `DelegationCall.retry_aggregate: str = "any_pass"` を実装。any_pass (default、FAIL-happy skill 向け) / all_pass (PASS-happy skill 向け、稀な FAIL 尊重) / majority (中庸)。short-circuit 挙動を mode 別に実装、12/12 unit test pass、check.py で unknown mode / even N+1 majority 警告。README + prompt-patterns.md で使い分けを解説
 - [ ] **P27 候補**: 別 skill (verify-content 等) で分布測定、「skill ごとの pathology map」を作る
 - [ ] **P25 候補**: agent prompt Pattern 2 (削除禁止 + clean fix hint) の実測、削除 over-reaction が緩和されるか
-- [ ] gate feedback の表現力改善 (「[^1] が消えている」→「削除された参照を復元せよ」等)
-- [ ] docs/knowhow/prompt-patterns.md — gate feedback の書き方も含める
+- [x] gate feedback の表現力改善 (2026-09-07): experiments/real-doc-refs/gate.sh の findings に「どう直すか」の hint を追加 (P23 Pattern 3 適用)、削除禁止 / 捏造禁止を明示
+- [x] docs/knowhow/prompt-patterns.md に gate feedback の書き方を含める (2026-09-06、Pattern 3 として掲載)
 
 ## Framework 側の設計課題 (P9 で顕在化)
 
-- [ ] workspace の dir 対応 — 現状 input_document は 1 file のみコピー。
-  code 領域 (tests/ が周辺に要る) では gate.sh 側で tempdir 組み直しが
-  workaround。長期には workspace 自体を dir ベースに拡張したい
+- [x] workspace の dir 対応 (2026-09-07): input_document / baseline_document が
+  dir でも file でも受け付ける。Workspace.prepare の shutil.copytree、
+  hash verify + tamper restore は tarfile snapshot。7/7 unit test 通過
 - [ ] predict-first の徹底 — 実験前に doc に予測を書く運用。P9 で予測を
   書かずに実行 → 「iter 5 で pass しない」ことが決まってから explanation
   を書く形になった。loop-goal HANDOVER 精神に反する
+
+## Unified reference
+
+- [x] `goals/examples/doc-verify-unified.yaml` (2026-09-07): 全 P14-P26 拡張を組み合わせた reference spec を追加。実運用テンプレとして参照可能
 
 ## 検討 (実装前に判断する)
 
 - [ ] gate.sh を pypi package 化してユーザーが `ralph-gate-loop-goal` みたいに参照できるようにするか
 - [ ] agent-loop-lab v1 で採用した Pydantic 出力型を v2 で復活させるか (subprocess 応答を型で拘束したい場合。ただし多くの agent CLI は自由 stdout)
-- [ ] `.env` の妥当性 check — spec load 時に OPENROUTER_API_KEY 未設定を警告するか
+- [x] `.env` の妥当性 check (2026-09-07): ralph check が agent.cmd=aider/opencode or model=openrouter/ or judge-openrouter 使用時に OPENROUTER_API_KEY 未設定を warning
 - [ ] Rate limit / retry の spec レベル制御 (v1 の SDK 内包 retry cap は削除された)
 - [ ] 実装を pypi 公開するか (現状は git clone + uv sync 前提。他人が使うなら公開)
 - [ ] claude-skills-marketplace への skill 化 (`/ralph` skill を作って Claude Code / Codex から自然文で呼び出せるようにするか)
