@@ -1,0 +1,51 @@
+# Template: aider + OpenRouter で loop-goal gate を通す Ralph loop
+# Ralph 原則を守るため --no-restore-chat-history + /dev/null 抑止が必須
+# (docs/knowhow/aider-integration.md §A 参照)。
+name: ${NAME}
+description: |
+  ${DESCRIPTION}
+
+input_document: ${INPUT_DOCUMENT}
+
+agent:
+  cmd: aider
+  args:
+    - "--yes-always"
+    - "--no-auto-commits"
+    - "--no-git"
+    - "--no-restore-chat-history"
+    - "--chat-history-file"
+    - "/dev/null"
+    - "--message-file"
+    - "/dev/stdin"
+    - "$CURRENT"
+  stdin_prompt: true
+  model: ${MODEL}
+  env: {}
+
+prompt: |
+  Target file: $CURRENT
+  Baseline (DO NOT modify): $BASE
+  Iteration: $ITER / $MAX_ITER
+
+  Previous gate output (findings to fix):
+  $PREV_GATE_OUTPUT
+
+  Instructions:
+    1. Read $CURRENT (already added to chat by aider).
+    2. Look at the previous gate output above. Each failing detector lists
+       specific line numbers and findings.
+    3. Emit SEARCH/REPLACE blocks to fix ONLY the failing findings.
+       Do not rewrite the file broadly. Do not delete substantive content.
+    4. When done, stop. The gate will verify.
+
+gate:
+  script: ${GATE_SCRIPT}
+  env: {}
+  timeout_sec: 60.0
+
+max_iterations: ${MAX_ITERATIONS}
+overall_timeout_sec: 900.0
+agent_timeout_sec: 300.0
+
+log_path: ${LOG_PATH}

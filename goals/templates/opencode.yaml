@@ -1,0 +1,46 @@
+# Template: opencode + OpenRouter で loop-goal gate を通す Ralph loop
+# opencode の -f は array で長い prompt を追加 file と誤解するので、
+# stdin_prompt: true が必須 (docs/knowhow/agent-cli-opencode.md 参照)。
+name: ${NAME}
+description: |
+  ${DESCRIPTION}
+
+input_document: ${INPUT_DOCUMENT}
+
+agent:
+  cmd: opencode
+  args:
+    - "run"
+    - "--auto"
+    - "-f"
+    - "$CURRENT"
+  stdin_prompt: true
+  model: ${MODEL}
+  env: {}
+
+prompt: |
+  Target file: $CURRENT
+  Baseline (DO NOT modify): $BASE
+  Iteration: $ITER / $MAX_ITER
+
+  Previous gate output (findings to fix):
+  $PREV_GATE_OUTPUT
+
+  Instructions:
+    1. Read $CURRENT to see the current state.
+    2. Look at the previous gate output above. Each failing detector lists
+       specific line numbers and findings.
+    3. Use the built-in file edit tool to fix ONLY the failing findings.
+       Do not delete substantive content. Do not rewrite the file broadly.
+    4. When done, stop. The gate will verify.
+
+gate:
+  script: ${GATE_SCRIPT}
+  env: {}
+  timeout_sec: 60.0
+
+max_iterations: ${MAX_ITERATIONS}
+overall_timeout_sec: 900.0
+agent_timeout_sec: 300.0
+
+log_path: ${LOG_PATH}

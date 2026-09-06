@@ -1,0 +1,45 @@
+# Template: claude CLI で loop-goal gate を通す Ralph loop
+# ralph init が ${...} を対話 or フラグで置換して goals/<name>.yaml を作る。
+name: ${NAME}
+description: |
+  ${DESCRIPTION}
+
+input_document: ${INPUT_DOCUMENT}
+
+agent:
+  cmd: claude
+  args:
+    - "-p"
+    - "--dangerously-skip-permissions"
+  stdin_prompt: true
+  model: ${MODEL}
+  # model="" or None なら CLI default (通常 haiku)。特定 model を指定するなら
+  # `claude-sonnet-4-5` 等を書く。
+  env: {}
+
+prompt: |
+  Target file: $CURRENT
+  Baseline (DO NOT modify): $BASE
+  Iteration: $ITER / $MAX_ITER
+
+  Previous gate output (findings to fix):
+  $PREV_GATE_OUTPUT
+
+  Instructions:
+    1. Read $CURRENT to see the current state.
+    2. Look at the previous gate output above. Each failing detector lists
+       specific line numbers and findings.
+    3. Fix ONLY the failing findings using the built-in Edit tool.
+       Do not delete substantive content.
+    4. When done, stop. The gate will verify.
+
+gate:
+  script: ${GATE_SCRIPT}
+  env: {}
+  timeout_sec: 60.0
+
+max_iterations: ${MAX_ITERATIONS}
+overall_timeout_sec: 900.0
+agent_timeout_sec: 300.0
+
+log_path: ${LOG_PATH}

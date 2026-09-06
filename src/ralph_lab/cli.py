@@ -1,6 +1,9 @@
-"""ralph CLI: `ralph run <spec.yaml>` [--model M | --models M1,M2,...]
+"""ralph CLI.
 
-`init` / `check` サブコマンドは P6-6 以降で追加予定。
+Subcommands:
+    run    — spec YAML を実行 (multi-model 対応)
+    init   — 対話 or フラグで spec YAML を生成
+    check  — spec YAML を validation
 """
 
 from __future__ import annotations
@@ -14,8 +17,13 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
+from ralph_lab.core.check import check_spec, format_issues, has_errors
+from ralph_lab.core.init import InitOptions, generate_spec
 from ralph_lab.core.loop import RalphResult, run_ralph_loop
 from ralph_lab.core.spec import GoalSpec
+
+_PROJECT_ROOT = Path(__file__).resolve().parents[2]
+# ↑ src/ralph_lab/cli.py → project root
 
 
 def _result_summary(result: RalphResult, *, model: str | None = None) -> dict:
@@ -164,13 +172,71 @@ def _cmd_run(args: argparse.Namespace) -> int:
     return 1
 
 
+def _cmd_init(args: argparse.Namespace) -> int:
+    """`ralph init` — spec 生成。生成後に自動 check (--no-check で無効)。"""
+    opts = InitOptions(
+        name=args.name,
+        input_document=args.input,
+        template=args.template,
+        model=args.model,
+        gate_script=args.gate,
+        max_iterations=args.max_iterations,
+        log_path=args.log_path,
+        description=args.description or "Ralph loop goal spec.",
+        output=args.output,
+        force=args.force,
+    )
+    try:
+        out_path = generate_spec(opts, _PROJECT_ROOT)
+    except FileExistsError as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        return 1
+    except (FileNotFoundError, ValueError) as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        return 4
+
+    print(f"wrote: {out_path}")
+
+    # 生成直後に自動 check
+    if not args.no_check:
+        try:
+            spec = GoalSpec.from_yaml(out_path)
+        except (FileNotFoundError, ValueError) as exc:
+            print(f"WARNING: generated spec failed to load: {exc}", file=sys.stderr)
+            return 0
+        issues = check_spec(spec)
+        print()
+        print(format_issues(issues))
+        if has_errors(issues):
+            print("\nFix the errors above before running the spec.", file=sys.stderr)
+            return 0  # 生成自体は成功
+    return 0
+
+
+def _cmd_check(args: argparse.Namespace) -> int:
+    """`ralph check` — spec validation。"""
+    try:
+        spec = GoalSpec.from_yaml(args.spec)
+    except (FileNotFoundError, ValueError) as exc:
+        print(f"ERROR: failed to load spec: {exc}", file=sys.stderr)
+        return 4
+
+    issues = check_spec(spec)
+    print(format_issues(issues))
+    return 1 if has_errors(issues) else 0
+
+
 def _build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="ralph",
-        description="Gate-neutral Ralph loop driver. Wrap agent CLIs in a subprocess loop until a user-supplied gate exits 0.",
+        description=(
+            "Gate-neutral Ralph loop driver. Wrap agent CLIs in a subprocess "
+            "loop until a user-supplied gate exits 0."
+        ),
     )
     sub = p.add_subparsers(dest="cmd", metavar="COMMAND")
 
+    # ---- run ----
     run_p = sub.add_parser("run", help="Run a Ralph loop from a spec YAML.")
     run_p.add_argument("spec", help="Path to spec YAML.")
     mg = run_p.add_mutually_exclusive_group()
@@ -190,6 +256,32 @@ def _build_parser() -> argparse.ArgumentParser:
                       help="Delete workspace after run.")
     run_p.add_argument("--pretty", action="store_true", help="Pretty-print JSON output.")
     run_p.set_defaults(func=_cmd_run)
+
+    # ---- init ----
+    init_p = sub.add_parser("init", help="Generate a new spec YAML from a template.")
+    init_p.add_argument("--name", help="Spec name (kebab-case). Prompted if omitted.")
+    init_p.add_argument("--input", help="Input document path. Prompted if omitted.")
+    init_p.add_argument("--template", default="claude",
+                        help="Template name under goals/templates/ "
+                             "(claude / aider / opencode). Default: claude.")
+    init_p.add_argument("--model", help="Model. Empty for CLI default.")
+    init_p.add_argument("--gate", help="Gate script path. Default: auto-discover loop-goal.")
+    init_p.add_argument("--max-iterations", type=int, default=5,
+                        help="max_iterations (default: 5).")
+    init_p.add_argument("--log-path", default="logs/ralph-runs.jsonl",
+                        help="JSONL log path (default: logs/ralph-runs.jsonl).")
+    init_p.add_argument("--description", help="Free-text description.")
+    init_p.add_argument("--output", type=Path, default=None,
+                        help="Output path (default: goals/<name>.yaml).")
+    init_p.add_argument("--force", action="store_true", help="Overwrite if output exists.")
+    init_p.add_argument("--no-check", action="store_true",
+                        help="Skip validation after generation.")
+    init_p.set_defaults(func=_cmd_init)
+
+    # ---- check ----
+    check_p = sub.add_parser("check", help="Validate a spec YAML.")
+    check_p.add_argument("spec", help="Path to spec YAML to validate.")
+    check_p.set_defaults(func=_cmd_check)
 
     return p
 

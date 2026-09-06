@@ -13,6 +13,8 @@ ralph-lab を実装・運用して得た**再現性のあるノウハウ**を残
 
 - [aider-integration.md](aider-integration.md) — aider CLI を Ralph loop で
   使うときの注意事項。特に chat history 蓄積問題
+- [agent-cli-opencode.md](agent-cli-opencode.md) — opencode CLI の pitfall
+  (`-f` array と長い prompt の衝突、stdin_prompt: true が必須)
 - [multi-model-comparison.md](multi-model-comparison.md) — `--models` で
   多モデル比較するときの workspace 設計と実測データ
 - [agent-cli-contract.md](agent-cli-contract.md) — Ralph の agent CLI に
