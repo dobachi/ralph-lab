@@ -1,0 +1,39 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+env/
+*.egg-info/
+dist/
+build/
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# Env / secrets
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+
+# Logs / caches
+*.log
+logs/
+.cache/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Backup files
+*.bak
+*.backup
+*.backup.*

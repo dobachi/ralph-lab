@@ -1,0 +1,39 @@
+[project]
+name = "ralph-lab"
+version = "0.1.0"
+description = "Gate-neutral Ralph loop driver: wrap agent CLIs (claude/codex/gemini) in a subprocess loop until a user-supplied gate script exits 0."
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [{ name = "dobachi" }]
+license = { text = "MIT" }
+
+# Ralph-lab itself makes no API calls. It only invokes agent CLIs as
+# subprocesses. The agent CLI has its own auth and SDK dependencies.
+# ralph-lab needs only stdlib + minimal helpers.
+dependencies = [
+  "pyyaml>=6.0",
+  "python-dotenv>=1.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "ruff>=0.5",
+  "pytest>=8.0",
+]
+
+[project.scripts]
+ralph = "ralph_lab.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/ralph_lab"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W", "UP", "B"]
