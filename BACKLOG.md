@@ -61,8 +61,7 @@ model 側の抽象特性。gate 側の強化が根本策:
 
 - [ ] loop-goal 開発者に「対称性 detector 追加」の相談 (逆向き捏造検出)
 - [ ] Anthropic model の code-fix で default response 型を上書きさせる prompt patterns
-- [ ] gate-design-patterns.md — 7 度観察を体系化、5 つの check の実装指針
-  (対応関係 / 単調性 / 内容 non-empty / 対称性 / 迂回検出)
+- [x] gate-design-patterns.md — 7 度観察を Goodhart 4 手法 × gate 5 check で体系化 — 2026-09-06 完了
 - [x] experiments/real-doc-refs/gate.sh に単調性 check 追加 — P12 (2026-09-06) 完了
 - [ ] gate.sh に内容 non-empty check 追加、8 度目 Goodhart 実測 (P13 候補)
 - [ ] gate feedback の表現力改善 (「[^1] が消えている」→「削除された参照を復元せよ」等)
