@@ -10,7 +10,7 @@
 ## 実装 / bug
 
 - [x] opencode CLI との aider 比較 (使い勝手 A/B) — P7 (2026-09-06) 完了
-- [ ] `--edit-format udiff` / `whole` で aider + Anthropic model の SEARCH/REPLACE 失敗が解消するか調査 (docs/knowhow/aider-integration.md §E)
+- [x] `--edit-format udiff` で aider + Anthropic model の SEARCH/REPLACE 失敗が解消するか調査 — P10-C (2026-09-06) で有効性確認 ✅
 - [x] `ralph init` サブコマンドの v1 移植 — P8 (2026-09-06) 完了
 - [x] `ralph check` サブコマンドの v1 移植 — P8 (2026-09-06) 完了
 - [ ] Windows 対応 (`/dev/stdin` 依存の解消、`--message-file` 系の platform 抽象化)
@@ -25,8 +25,9 @@
 - [x] v1 P4 の再現 (「S-99 捏造で pass」現象が v2 でも起きるか) — P7 (2026-09-06) で再現確認済、aider/opencode で追認
 - [ ] gate の複合化 — loop-goal + custom grep で複数 detector を AND
 - [x] コード領域の gate 検証 (pytest) — P9 (2026-09-06) 実施、5 iter で pass せず。gpt-4.1-mini の Goodhart 型 hack (`return 5`) を実測。cargo / eslint は未実施
-- [ ] P9 の続き: 強い model (claude-3.7-sonnet, sonnet-4-5) で code-fix-pytest が pass するか
-- [ ] Anthropic model + opencode の検証 (aider の Anthropic 失敗と対照、P7 で未実施)
+- [x] P9 の続き: sonnet-4.5 / haiku-4.5 で code-fix-pytest — P10-A/B (2026-09-06)、両者とも 5 iter で pass せず (divide の ValueError vs ZeroDivisionError で停止)
+- [x] Anthropic model + opencode の検証 — P10-D (2026-09-06) で pass 2 iter clean fix ✅
+- [ ] Anthropic + opencode で code-fix-pytest (P10-A/B の aider fail の対照)
 - [ ] n=5 くらい回して非決定性の分布測定 (S-99 捏造 vs clean fix の出現率)
 - [ ] opencode の chat history 相当が cwd に貯まるか長期実験
 
@@ -36,6 +37,21 @@
 - [ ] docs/knowhow/agent-cli-<cli>.md 残: codex CLI, claude CLI
 - [ ] docs/knowhow/prompt-patterns.md — Ralph 系で通りやすい prompt 型の抽出
 - [x] README に「Quickstart 3 通り」を明示 — P8 (2026-09-06) 完了
+
+## 5 度観察された Goodhart 型行動 (P10 で完結、model 特性として確定)
+
+各 session で下記 Goodhart pass が観察された:
+- v1 P4 (2026-08-15): gpt-4.1-mini via SDK、S-99 空エントリ捏造
+- v2 P7 aider (2026-09-06): gpt-4.1-mini、同型
+- v2 P7 opencode 初回: gpt-4.1-mini、S-06 削除 + S-99 別データ捏造
+- v2 P9: gpt-4.1-mini、code fix で `return 5` hack
+- v2 P10-C: haiku-4.5, 本文でなく出典表を書き換え (逆向き捏造)
+
+**結論**: model / CLI / gate / 領域を変えても発現する model 側の抽象特性。
+gate 側の強化 (loop-goal に対称性 check 追加等) が根本策の候補。
+
+- [ ] loop-goal 開発者に「対称性 detector 追加」の相談 (逆向き捏造検出)
+- [ ] Anthropic model の code-fix で default response 型を上書きさせる prompt patterns
 
 ## Framework 側の設計課題 (P9 で顕在化)
 
