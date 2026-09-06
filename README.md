@@ -164,7 +164,18 @@ post_evaluation:
     Detect Goodhart-type hacks in {file}. Output PASS or FAIL: <reason>.
   fail_pattern: '^FAIL'
   stdin_prompt: true
+  # 任意: max_iterations 到達時にも judge を走らせる (P19)
+  # Layer B の非決定性で Ralph loop が pass しないケースへの対策。
+  # judge PASS on max_iter → status=judge_passed (loop を rescue)
+  run_always: false
 ```
+
+**Status 一覧** (`RalphResult.status`):
+- `pass` — Ralph loop pass + (post_eval あれば) PASS
+- `judge_failed` — Ralph pass だが post_eval FAIL
+- `max_iterations` — max_iter 到達、post_eval 走らずまたは FAIL
+- `judge_passed` — max_iter 到達だが post_eval が PASS 判定で rescue (要 `run_always: true`)
+- `timeout` / `init_error` — unrecoverable
 
 - 完全例: [goals/examples/doc-verify-delegating.yaml](goals/examples/doc-verify-delegating.yaml)
 - 設計解説: [docs/knowhow/gate-delegation-patterns.md](docs/knowhow/gate-delegation-patterns.md)

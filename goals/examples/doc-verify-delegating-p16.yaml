@@ -125,6 +125,11 @@ post_evaluation:
   fail_pattern: '^FAIL'
   timeout_sec: 180
   stdin_prompt: true
+  # P19: max_iterations に達しても judge を走らせる。Layer B (doc-review)
+  # の非決定性で Layer C まで到達しないケース (P16 で実測) への対策。
+  # judge PASS on max_iter → status=judge_passed (rescue)
+  # judge FAIL on max_iter → status=max_iterations (judge が確認)
+  run_always: true
 
 max_iterations: 3
 overall_timeout_sec: 1800  # 委譲 + judge で余裕を持たせる

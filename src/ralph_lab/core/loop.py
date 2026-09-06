@@ -64,7 +64,16 @@ class IterationRecord:
 class RalphResult:
     spec_name: str
     status: str
-    """pass | max_iterations | timeout | init_error | judge_failed"""
+    """pass | max_iterations | timeout | init_error | judge_failed | judge_passed
+
+    - pass: Ralph loop pass、post_eval (あれば) も pass
+    - judge_failed: Ralph loop pass だが post_eval が FAIL 判定
+    - max_iterations: Ralph loop 5 iter で終わらず、post_eval (もし run_always
+      で走ったなら) も FAIL 判定 or 未実行
+    - judge_passed: (P19) Ralph loop 5 iter だが post_eval が「実は OK」と rescue
+      判定 = Layer B/C 非決定性への対策で judge を最終権威に
+    - timeout / init_error: unrecoverable
+    """
 
     iterations: int
     workspace_root: Path
@@ -332,9 +341,16 @@ async def run_ralph_loop(
     except asyncio.TimeoutError:
         status = "timeout"
 
-    # 7. Post-evaluation (Layer C = LLM-as-judge) if configured and Ralph passed
+    # 7. Post-evaluation (Layer C = LLM-as-judge)
+    # 通常: status=pass のときのみ実行
+    # run_always=True (P19): status=max_iterations でも実行 = Layer B/C の
+    # 非決定的 FAIL で Ralph loop まで到達しないケースへの対策
     post_eval_result: PostEvaluationResult | None = None
-    if status == "pass" and spec.post_evaluation is not None:
+    should_run_judge = spec.post_evaluation is not None and (
+        status == "pass"
+        or (status == "max_iterations" and spec.post_evaluation.run_always)
+    )
+    if should_run_judge:
         post_eval_result = await run_post_evaluation(
             spec.post_evaluation,
             workspace.current,
@@ -342,8 +358,15 @@ async def run_ralph_loop(
             workspace.root,
         )
         _log_post_evaluation(spec.log_path, spec, post_eval_result)
-        if not post_eval_result.passed:
+        # Status 遷移:
+        #   pass       + judge_pass → pass (変わらず)
+        #   pass       + judge_fail → judge_failed (既存挙動)
+        #   max_iter   + judge_pass → judge_passed (P19、rescue)
+        #   max_iter   + judge_fail → max_iterations (変わらず、judge が確認)
+        if status == "pass" and not post_eval_result.passed:
             status = "judge_failed"
+        elif status == "max_iterations" and post_eval_result.passed:
+            status = "judge_passed"
 
     total_duration_ms = int((time.monotonic() - start) * 1000)
     result = RalphResult(

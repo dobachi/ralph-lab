@@ -144,6 +144,13 @@ class PostEvaluationConfig:
     model: str | None = None
     """モデル名 (agent と異なる provider が望ましい)"""
 
+    run_always: bool = False
+    """P19: True なら status=pass に加えて status=max_iterations でも judge を
+    走らせる (Layer B の非決定的 FAIL で Layer C まで到達しないケースへの対策)。
+    judge PASS on max_iter → 新 status=judge_passed で Ralph loop を rescue。
+    judge FAIL on max_iter → status=max_iterations のまま (judge が失敗確認)。
+    Default False で従来挙動。"""
+
 
 @dataclass(frozen=True)
 class GoalSpec:
@@ -249,6 +256,7 @@ class GoalSpec:
                 timeout_sec=float(post_eval_raw.get("timeout_sec", 600.0)),
                 stdin_prompt=bool(post_eval_raw.get("stdin_prompt", True)),
                 model=post_eval_raw.get("model"),
+                run_always=bool(post_eval_raw.get("run_always", False)),
             )
 
         return cls(
