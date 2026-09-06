@@ -173,18 +173,23 @@ if missing_refs or missing_defs:
 **loop-goal の対応**: 直接対応する detector は無い (loop-goal の対象は
 出典表の 4-column 形式で、"内容の実質性" を各 detector が暗黙的に仮定)
 
-**未実装、実装例案** (P13 予定):
+**ralph-lab の実装** (`experiments/real-doc-refs/gate.sh`、P13 で追加):
 ```python
-def_content_pattern = re.compile(r'^\[\^(\d+)\]:\s*(.+)$', re.MULTILINE)
-empty_or_short = []
+def_content_pattern = re.compile(r'^\[\^(\d+)\]:\s*(.*)$', re.MULTILINE)
+empty_defs = []
 for m in def_content_pattern.finditer(text):
     n, content = m.group(1), m.group(2).strip()
-    if len(content) < 20 or not re.search(r'https?://', content):
-        empty_or_short.append(n)
-if empty_or_short:
-    print(f"❌ 空/薄い定義: {empty_or_short}")
+    if not content:
+        empty_defs.append(n)
+if empty_defs:
+    print(f"❌ 空定義: {empty_defs}")
     sys.exit(1)
 ```
+
+**採用した閾値**: 「空 (whitespace のみ)」だけを NG に。理由は false
+positive 回避 — legit な非 URL 引用 (例: `[^1]: ISO 25010:2011 §4.2`) を
+誤検出したくない。URL 形式の dummy (`[^99]: https://dummy.example`) を
+塞ぐには Layer B (fact-checker 委譲) が必要。
 
 **feedback message**: 「なぜ薄いか」を明示 (文字数 or URL 有無):
 
@@ -415,7 +420,7 @@ P13 予定、4-5 は Layer B/C の設計課題。
 |---|---|---|---|
 | 1. 対応関係 | A | ✅ (P11) | `refs vs defs` の subset 演算 |
 | 2. 単調性 | A | ✅ (P12) | `base_refs ⊂ curr_refs`, `base_defs ⊂ curr_defs` |
-| 3. 内容 non-empty | A | ❌ (P13 予定) | 空 `[^N]: ` を検出できていない |
+| 3. 内容 non-empty | A | ✅ (P13) | `[^N]:` の content が空 (whitespace のみ) を NG。URL 形式 dummy は素通り |
 | 4. 対称性 | B | 部分的 (prompt で対応) + **委譲可能 (P14)** | gate 側 hash check は未実装、prompt + `delegate_to: doc-review` で強化可能 |
 | 5. 迂回検出 | C | **委譲可能 (P14)** | `post_evaluation` に LLM-as-judge を挿す運用が可能に |
 

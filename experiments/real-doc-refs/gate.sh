@@ -21,6 +21,12 @@
 #     - P11 (2026-09-06) で agent が [^99] を削除して pass した観察への
 #       直接対策
 #
+#   [3] 内容 non-empty (P13 で追加):
+#     - `[^N]: <content>` の <content> 部分が空 or whitespace のみ → NG
+#     - **loop-goal §2.4-4 相当**: 「捏造 (空定義追加)」型 Goodhart を塞ぐ
+#     - P12 (2026-09-06) で agent が `[^99]: ` (空) を追加して pass した
+#       観察への直接対策
+#
 # 実装は Python3 の embedded script。標準ライブラリのみ。
 
 set -u
@@ -41,6 +47,11 @@ import sys
 from pathlib import Path
 
 def_pattern = re.compile(r'^\[\^(\d+)\]:\s', re.MULTILINE)
+# 定義行の content 部分 (`[^N]: <content>`) を抜くための pattern。
+# `:` 直後の任意 whitespace を除いた残りを capture group 2。空 def
+# (`[^N]:\s*$`) も検出できるように `.*` を使う (改行なしの `\s*.*`
+# なら空行末も match する)。
+def_content_pattern = re.compile(r'^\[\^(\d+)\]:\s*(.*)$', re.MULTILINE)
 ref_pattern = re.compile(r'\[\^(\d+)\](?!:)')
 
 
@@ -58,6 +69,21 @@ def extract_refs_defs(text: str):
     return ref_ids, def_ids
 
 
+def extract_empty_defs(text: str):
+    """`[^N]: <content>` の <content> が空 (whitespace のみ) の N を返す。
+
+    P12 の Goodhart hack (空定義追加) を検出。定義行自体は存在するので
+    Check 1 (対応関係) と Check 2 (単調性) は素通りする。ここで塞ぐ。
+    """
+    empty_ids: list[str] = []
+    for m in def_content_pattern.finditer(text):
+        n = m.group(1)
+        content = m.group(2).strip()
+        if not content:
+            empty_ids.append(n)
+    return sorted(empty_ids, key=int)
+
+
 current_path = Path(sys.argv[1])
 base_path_str = sys.argv[2] if len(sys.argv) > 2 else ""
 base_path = Path(base_path_str) if base_path_str else None
@@ -68,6 +94,9 @@ curr_refs, curr_defs = extract_refs_defs(current_text)
 # 対応関係
 undefined = sorted(curr_refs - curr_defs, key=int)
 unused = sorted(curr_defs - curr_refs, key=int)
+
+# 内容 non-empty (P13、Check 3)
+empty_defs = extract_empty_defs(current_text)
 
 # BASE 比較 (単調性 check)
 base_refs = None
@@ -107,6 +136,16 @@ if missing_defs:
         f"{missing_defs}"
     )
 
+# 内容 non-empty (Check 3) の findings
+if empty_defs:
+    report.append(
+        f"  ❌ 空定義 (`[^N]:` が中身なし、Goodhart 対策): {empty_defs}"
+    )
+    report.append(
+        f"     → 本文の対応する `[^N]` を、BASE で使われていた既存参照 (例: [^1]) に戻すこと。"
+        f"     空 `[^{empty_defs[0]}]: ` は削除。"
+    )
+
 # 保証しないこと (loop-goal 風)
 report.append("")
 report.append("保証しないこと:")
@@ -116,6 +155,9 @@ report.append("  - 脚注が正しい位置に付いているかは見ない")
 report.append("  - 単調性 check は refs/defs の集合だけを見る。位置や数の")
 report.append("    保持は見ない (例: 同じ [^1] が 2 箇所 → 1 箇所は検出しない)")
 report.append("  - BASE 未指定なら単調性 check は行わない")
+report.append("  - Check 3 (内容 non-empty) は「空」のみを検出。URL 形式の")
+report.append("    dummy (例: `https://dummy.example`) は素通り。この隣の穴は")
+report.append("    Layer B (fact-checker 委譲) or Layer C (LLM-as-judge) で塞ぐ")
 
 print("\n".join(report))
 
@@ -126,6 +168,9 @@ if undefined:
 if missing_refs or missing_defs:
     n = len(missing_refs or []) + len(missing_defs or [])
     print(f"\n判定: NG (単調性違反 {n} 件、削除された参照/定義がある)")
+    sys.exit(1)
+if empty_defs:
+    print(f"\n判定: NG (空定義 {len(empty_defs)} 件、捏造型 Goodhart の疑い)")
     sys.exit(1)
 if unused:
     print(f"\n判定: WARN ({len(unused)} 個の未使用定義、gate は pass)")

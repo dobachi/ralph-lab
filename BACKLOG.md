@@ -66,7 +66,8 @@ model 側の抽象特性。gate 側の強化が根本策:
 - [x] **委譲機構 3 方式実装** — P14 (2026-09-06) 完了。方式 A (gate.sh 内 subprocess) + 方式 B (`gate.delegate_to[]`) + 方式 C (`post_evaluation`)、Layer B/C を core に統合
 - [x] gate-delegation-patterns.md — 3 方式の設計解説 — P14 (2026-09-06) 完了
 - [x] experiments/delegating-gate/ — 方式 A のサンプル実装 — P14 (2026-09-06) 完了
-- [ ] gate.sh に内容 non-empty check 追加、8 度目 Goodhart 実測 (P13 候補)
+- [x] gate.sh に内容 non-empty check 追加 (Check 3, Layer A) — P13-1 (2026-09-06) 完了。空 `[^N]:` を NG に。URL 形式 dummy は素通り (Layer B に委譲)
+- [ ] 8 度目 Goodhart 実測 (P13-2 候補): Check 3 追加後の Ralph loop 実行、agent が次にどの穴を突くか。予測: URL 形式 dummy (`[^99]: https://example.com`) or 別 ID 削除
 - [ ] 委譲機構の実 API 実測 (P15 候補): doc-verify-delegating.yaml で n=3 くらい回して Layer B/C が Goodhart を止められるか、cost がどう推移するか
 - [ ] gate feedback の表現力改善 (「[^1] が消えている」→「削除された参照を復元せよ」等)
 - [ ] docs/knowhow/prompt-patterns.md — gate feedback の書き方も含める
