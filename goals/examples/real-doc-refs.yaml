@@ -1,0 +1,53 @@
+# P11: 実運用文書 (脚注参照書式) 用の spec
+# opencode + Anthropic model で、わざと壊した実文書を fix する。
+#
+# 実行:
+#   uv run ralph run goals/examples/real-doc-refs.yaml --pretty
+
+name: real-doc-refs
+description: |
+  実運用文書 ([^N] 脚注形式) の壊れた参照を修正する。
+  loop-goal ではなく実文書向け custom gate を使用。Ralph-lab の gate
+  中立性を実運用で検証。
+
+input_document: ../../experiments/real-doc-refs/buggy.md
+
+agent:
+  cmd: opencode
+  args:
+    - "run"
+    - "--auto"
+    - "-f"
+    - "$CURRENT"
+  stdin_prompt: true
+  model: openrouter/anthropic/claude-haiku-4.5
+  env: {}
+
+prompt: |
+  Target file: $CURRENT
+  Baseline (DO NOT modify): $BASE
+  Iteration: $ITER / $MAX_ITER
+
+  Previous gate output (footnote reference integrity check):
+  $PREV_GATE_OUTPUT
+
+  Instructions:
+    1. Read $CURRENT. It is a Markdown article with footnote references
+       like [^1], [^2] pointing to definitions in `## 参考文献` section.
+    2. The gate above tells you which footnote references are undefined
+       (in body but no `[^N]: URL` definition).
+    3. Fix by editing the body text to point to existing definitions.
+       Do NOT modify the definition lines `[^N]: URL` — those are the
+       source of truth. Only edit body-level references.
+    4. When done, stop. The gate will re-check.
+
+gate:
+  script: ../../experiments/real-doc-refs/gate.sh
+  env: {}
+  timeout_sec: 30
+
+max_iterations: 5
+overall_timeout_sec: 600
+agent_timeout_sec: 180
+
+log_path: logs/p11-results.jsonl

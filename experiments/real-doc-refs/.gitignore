@@ -1,0 +1,5 @@
+# daily-curation-reports (private) からの実文書 fixture は commit しない
+# 手元でのみ扱う
+baseline.md
+buggy.md
+current.md
