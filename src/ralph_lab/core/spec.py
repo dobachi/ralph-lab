@@ -4,6 +4,10 @@ Ralph 原則:
 - 各 iteration で agent CLI を subprocess として起動
 - Context は agent CLI 側で持たない (毎回 fresh)
 - 状態はファイルシステム (workspace) と gate stdout で伝える
+
+拡張 (P14, 2026-09-06):
+- gate.delegate_to: 委譲呼び出し (Layer B、方式 B)
+- post_evaluation: Ralph pass 後の判定 (Layer C、方式 C)
 """
 
 from __future__ import annotations
@@ -42,6 +46,48 @@ class AgentSpec:
 
 
 @dataclass(frozen=True)
+class DelegationCall:
+    """1 件の委譲呼び出し (Layer B、方式 B の要素)。
+
+    Ralph loop の gate.script が pass した後、または並行して、別スキル
+    (fact-checker / doc-review / verify-content 等) を subprocess で呼び、
+    その結果を集約して gate 判定に反映する。
+
+    例:
+        DelegationCall(
+            name="fact-checker",
+            cmd="claude",
+            args=["-p", "--dangerously-skip-permissions"],
+            prompt="Run /fact-checker on {file}. Output PASS or FAIL.",
+            fail_pattern=r'^FAIL',
+            timeout_sec=180.0,
+        )
+    """
+
+    name: str
+    """委譲の識別名 (log に出す)"""
+
+    cmd: str
+    """呼び出すコマンド (claude / codex / agy 等)"""
+
+    args: list[str] = field(default_factory=list)
+    """コマンドに渡す固定引数"""
+
+    prompt: str = ""
+    """subprocess に渡す prompt。`{file}` は current file の絶対 path に、
+    `{base}` は BASE file の絶対 path に render 時に置換される"""
+
+    fail_pattern: str = r"^FAIL"
+    """subprocess の stdout に対する regex。match したら fail 判定"""
+
+    timeout_sec: float = 300.0
+    """subprocess の timeout"""
+
+    stdin_prompt: bool = True
+    """True なら prompt を stdin 経由、False なら args 末尾に append"""
+
+
+@dataclass(frozen=True)
 class GateConfig:
     """Gate script の呼び出し仕様。
 
@@ -50,16 +96,58 @@ class GateConfig:
     - 環境変数: `BASE=<baseline_file>` (driver が自動で埋める)
     - Exit code: 0 = passed, non-zero = failed
     - stdout: 次 iteration の feedback として agent に渡される
+
+    拡張:
+    - delegate_to: syntactic gate pass 後に実行する委譲呼び出しの list
+    - aggregate: 委譲結果の集約ルール (all_pass = 全部 pass で pass)
     """
 
     script: Path
     env: dict[str, str] = field(default_factory=dict)
     timeout_sec: float = 60.0
 
+    delegate_to: list[DelegationCall] = field(default_factory=list)
+    """Layer B の委譲呼び出し (方式 B)。syntactic gate pass 後に実行"""
+
+    aggregate: str = "all_pass"
+    """委譲結果の集約ルール。all_pass = 全部 pass で pass、any_pass = 1 つでも pass なら pass"""
+
+
+@dataclass(frozen=True)
+class PostEvaluationConfig:
+    """Ralph loop の pass 後に呼ぶ最終評価 (Layer C、方式 C = LLM-as-judge)。
+
+    Ralph loop が status=pass で終わった後、別 model で全体を judge する。
+    Goodhart 型 hack の post-hoc 検出が主用途。
+
+    Judge は Ralph loop の外側で 1 回だけ呼ばれる (cost 効率良)。
+    """
+
+    cmd: str
+    """Judge の CLI (agent と異 provider 推奨、Goodhart 対策)"""
+
+    args: list[str] = field(default_factory=list)
+    """CLI 引数"""
+
+    prompt: str = ""
+    """Judge への prompt。`{file}` は最終 file の絶対 path に置換"""
+
+    fail_pattern: str = r"^FAIL"
+    """stdout の regex。match したら judge fail"""
+
+    timeout_sec: float = 600.0
+    """Judge 呼び出しの timeout"""
+
+    stdin_prompt: bool = True
+    """True なら prompt を stdin 経由"""
+
+    model: str | None = None
+    """モデル名 (agent と異なる provider が望ましい)"""
+
 
 @dataclass(frozen=True)
 class GoalSpec:
-    """Ralph loop の宣言的定義 (v2)。"""
+    """Ralph loop の宣言的定義 (v2 + P14 拡張)。"""
 
     name: str
     description: str
@@ -77,6 +165,9 @@ class GoalSpec:
 
     log_path: Path = Path("logs/ralph-runs.jsonl")
 
+    post_evaluation: PostEvaluationConfig | None = None
+    """Ralph pass 後の judge 呼び出し (Layer C)。None なら post_evaluation なし"""
+
     @classmethod
     def from_yaml(cls, path: Path | str) -> "GoalSpec":
         yaml_path = Path(path).expanduser().resolve()
@@ -92,7 +183,6 @@ class GoalSpec:
         # agent section
         agent_raw = data["agent"]
         if isinstance(agent_raw, str):
-            # shortcut: agent: claude → AgentSpec(cmd="claude", args=[])
             agent = AgentSpec(cmd=agent_raw)
         elif isinstance(agent_raw, dict):
             agent = AgentSpec(
@@ -105,15 +195,61 @@ class GoalSpec:
         else:
             raise ValueError(f"agent must be a string or mapping, got {type(agent_raw)}")
 
-        # gate section
+        # gate section (with optional delegate_to)
         gate_raw = data["gate"]
         if not isinstance(gate_raw, dict) or "script" not in gate_raw:
             raise ValueError(f"gate must be a mapping with a 'script' field in {yaml_path}")
+
+        delegate_to_raw = gate_raw.get("delegate_to", [])
+        delegate_to = []
+        for i, d in enumerate(delegate_to_raw):
+            if not isinstance(d, dict):
+                raise ValueError(
+                    f"gate.delegate_to[{i}] must be a mapping in {yaml_path}"
+                )
+            if "cmd" not in d:
+                raise ValueError(
+                    f"gate.delegate_to[{i}].cmd is required in {yaml_path}"
+                )
+            delegate_to.append(DelegationCall(
+                name=str(d.get("name", f"delegation-{i}")),
+                cmd=str(d["cmd"]),
+                args=list(d.get("args", [])),
+                prompt=str(d.get("prompt", "")),
+                fail_pattern=str(d.get("fail_pattern", r"^FAIL")),
+                timeout_sec=float(d.get("timeout_sec", 300.0)),
+                stdin_prompt=bool(d.get("stdin_prompt", True)),
+            ))
+
         gate = GateConfig(
             script=_resolve_path(gate_raw["script"], base_dir),
             env=dict(gate_raw.get("env", {})),
             timeout_sec=float(gate_raw.get("timeout_sec", 60.0)),
+            delegate_to=delegate_to,
+            aggregate=str(gate_raw.get("aggregate", "all_pass")),
         )
+
+        # post_evaluation section (optional)
+        post_eval_raw = data.get("post_evaluation")
+        post_evaluation: PostEvaluationConfig | None = None
+        if post_eval_raw is not None:
+            if not isinstance(post_eval_raw, dict):
+                raise ValueError(
+                    f"post_evaluation must be a mapping in {yaml_path}"
+                )
+            if "cmd" not in post_eval_raw:
+                raise ValueError(
+                    f"post_evaluation.cmd is required in {yaml_path}"
+                )
+            post_evaluation = PostEvaluationConfig(
+                cmd=str(post_eval_raw["cmd"]),
+                args=list(post_eval_raw.get("args", [])),
+                prompt=str(post_eval_raw.get("prompt", "")),
+                fail_pattern=str(post_eval_raw.get("fail_pattern", r"^FAIL")),
+                timeout_sec=float(post_eval_raw.get("timeout_sec", 600.0)),
+                stdin_prompt=bool(post_eval_raw.get("stdin_prompt", True)),
+                model=post_eval_raw.get("model"),
+            )
 
         return cls(
             name=str(data["name"]),
@@ -126,6 +262,7 @@ class GoalSpec:
             overall_timeout_sec=float(data.get("overall_timeout_sec", 900.0)),
             agent_timeout_sec=float(data.get("agent_timeout_sec", 600.0)),
             log_path=_resolve_path(str(data.get("log_path", "logs/ralph-runs.jsonl")), base_dir),
+            post_evaluation=post_evaluation,
         )
 
 

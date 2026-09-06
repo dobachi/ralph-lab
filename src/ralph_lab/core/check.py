@@ -129,6 +129,64 @@ def check_spec(spec: GoalSpec) -> list[SpecIssue]:
             "claude CLI accepts short names.",
         ))
 
+    # delegate_to (Layer B, 方式 B)
+    for i, d in enumerate(spec.gate.delegate_to):
+        if not d.cmd:
+            issues.append(SpecIssue(
+                "error", f"gate.delegate_to[{i}].cmd",
+                f"empty cmd in delegation {d.name!r}",
+            ))
+        elif shutil.which(d.cmd) is None:
+            issues.append(SpecIssue(
+                "error", f"gate.delegate_to[{i}].cmd",
+                f"delegation CLI not found in PATH: {d.cmd!r} (delegation: {d.name!r})",
+            ))
+        if not d.prompt.strip():
+            issues.append(SpecIssue(
+                "warning", f"gate.delegate_to[{i}].prompt",
+                f"empty prompt in delegation {d.name!r}",
+            ))
+        if d.timeout_sec <= 0:
+            issues.append(SpecIssue(
+                "error", f"gate.delegate_to[{i}].timeout_sec",
+                f"must be > 0 (got {d.timeout_sec})",
+            ))
+    if spec.gate.aggregate not in ("all_pass", "any_pass"):
+        issues.append(SpecIssue(
+            "warning", "gate.aggregate",
+            f"unknown aggregate rule {spec.gate.aggregate!r} (known: all_pass, any_pass). "
+            "unknown rule = fail-conservative.",
+        ))
+
+    # post_evaluation (Layer C, 方式 C)
+    if spec.post_evaluation is not None:
+        pe = spec.post_evaluation
+        if not pe.cmd:
+            issues.append(SpecIssue(
+                "error", "post_evaluation.cmd", "empty cmd",
+            ))
+        elif shutil.which(pe.cmd) is None:
+            issues.append(SpecIssue(
+                "error", "post_evaluation.cmd",
+                f"judge CLI not found in PATH: {pe.cmd!r}",
+            ))
+        if not pe.prompt.strip():
+            issues.append(SpecIssue(
+                "warning", "post_evaluation.prompt", "empty prompt",
+            ))
+        if pe.timeout_sec <= 0:
+            issues.append(SpecIssue(
+                "error", "post_evaluation.timeout_sec",
+                f"must be > 0 (got {pe.timeout_sec})",
+            ))
+        # Info: judge model が agent と同じ provider か
+        if pe.model and spec.agent.model and pe.model == spec.agent.model:
+            issues.append(SpecIssue(
+                "info", "post_evaluation.model",
+                f"judge model {pe.model!r} matches agent model. "
+                "Consider using a different provider (Goodhart 相関エラー対策)."
+            ))
+
     return issues
 
 
