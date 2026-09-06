@@ -81,7 +81,9 @@ model 側の抽象特性。gate 側の強化が根本策:
 - [x] **P20 (framework 改善)**: `delegate_to[N].retries: int = 0` を実装。any-pass 短絡 (最初に PASS 返した時点で終了)、launch error は再試行しない、DelegationResult.attempts で試行回数を記録。5/5 sanity test 通過 (single-shot / short-circuit / all-retries-used / all-fail / launch-error)。check.py で retries<0 error、retries>5 warning
 - [ ] **P21 候補**: gpt-4o-mini で judge 実測 ($0.01/回)、cheap tier でも検出可能か
 - [x] **P17 (framework 観測性改善)**: JSONL log に `stdout_head` / `stderr_head` (先頭 200 char + `...[TRUNCATED]` 印) を追加 — agent / gate / delegations / post_evaluation の 4 種全部。判定理由 (PASS/FAIL の 1 行) を post-hoc に分析可能に。2026-09-06 完了、mock test 4/4 pass
-- [ ] **P18 候補**: fact-checker prompt 改訂 (「URL なし = FAIL」)、Layer B 再実測
+- [x] **P18 実測 (2026-09-06)**: fact-checker prompt 改訂 (「URL/DOI/ISBN 要求、prose paraphrase は不可」) — Layer B が確実に FAIL 判定できるように。P15/P16 で素通りしていた URL なし descriptive dummy を捕捉。ただし agent (haiku-4.5) は clean fix できず、Layer C も FAIL で 3 層一致の「fabrication」認定 (status=max_iterations)。実測 cost $0.23。詳細は `docs/experiments/2026-09-06-p18-results.md`
+- [ ] **P22 候補** ($0.20-0.30): 統合実測 (P19+P20 有効化)。P18 spec に retries=2 を入れて Layer B doc-review の非決定性が緩和されるか実測
+- [ ] **P23 候補** (framework): agent の feedback 追随能力向上 prompt patterns。「なぜ FAIL か」明示、「clean fix path」hint
 - [ ] gate feedback の表現力改善 (「[^1] が消えている」→「削除された参照を復元せよ」等)
 - [ ] docs/knowhow/prompt-patterns.md — gate feedback の書き方も含める
 
