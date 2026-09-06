@@ -59,10 +59,25 @@ class PostEvaluationResult:
 
 
 def _render_prompt(template: str, current: Path, base: Path | None) -> str:
-    """`{file}` `{base}` の placeholder を置換する。"""
+    """`{file}` `{base}` `{file_content}` `{base_content}` の placeholder を置換する。
+
+    - `{file}` / `{base}`: path 文字列 (claude / opencode 等、file read tool を
+      持つ CLI 用)
+    - `{file_content}` / `{base_content}`: file の本文を inline (OpenRouter API
+      直叩き wrapper など、file read tool を持たない judge 用、P16 で追加)
+
+    file_content の展開は on-demand: `{file_content}` が template にあるとき
+    だけ file を読む。無ければ read しない (I/O 節約 + Ralph 原則整合)。
+    """
     result = template.replace("{file}", str(current))
+    if "{file_content}" in template and current.is_file():
+        content = current.read_text(encoding="utf-8", errors="replace")
+        result = result.replace("{file_content}", content)
     if base is not None:
         result = result.replace("{base}", str(base))
+        if "{base_content}" in template and base.is_file():
+            base_content = base.read_text(encoding="utf-8", errors="replace")
+            result = result.replace("{base_content}", base_content)
     return result
 
 
