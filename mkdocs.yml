@@ -1,0 +1,25 @@
+site_name: ralph-lab docs
+site_description: Gate-neutral Ralph loop driver — 実装知見と実験ログ
+
+docs_dir: docs
+site_dir: _site
+
+theme:
+  name: readthedocs
+  highlightjs: true
+  hljs_languages:
+    - yaml
+    - bash
+    - python
+
+markdown_extensions:
+  - toc:
+      permalink: true
+  - tables
+  - fenced_code
+  - admonition
+
+use_directory_urls: false
+
+# docs/ 外の top-level README.md, BACKLOG.md 等は docs/ 内への symlink で
+# 持ち込む (mkdocs は docs_dir 外を参照できない)。詳細は docs/README.md

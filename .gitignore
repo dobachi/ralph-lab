@@ -37,3 +37,4 @@ logs/
 *.bak
 *.backup
 *.backup.*
+_site/
