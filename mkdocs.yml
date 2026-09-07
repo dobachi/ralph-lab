@@ -1,25 +1,115 @@
-site_name: ralph-lab docs
+site_name: ralph-lab
 site_description: Gate-neutral Ralph loop driver — 実装知見と実験ログ
+site_url: https://dobachi.github.io/ralph-lab/
+repo_url: https://github.com/dobachi/ralph-lab
+repo_name: dobachi/ralph-lab
 
 docs_dir: docs
 site_dir: _site
 
 theme:
-  name: readthedocs
-  highlightjs: true
-  hljs_languages:
-    - yaml
-    - bash
-    - python
+  name: material
+  language: ja
+  features:
+    - navigation.instant
+    - navigation.tracking
+    - navigation.tabs
+    - navigation.sections
+    - navigation.top
+    - toc.follow
+    - content.code.copy
+    - search.highlight
+    - search.share
+  icon:
+    repo: fontawesome/brands/github
+  palette:
+    - scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/weather-night
+        name: ダークモード
+    - scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/weather-sunny
+        name: ライトモード
 
 markdown_extensions:
   - toc:
       permalink: true
   - tables
-  - fenced_code
   - admonition
+  - attr_list
+  - md_in_html
+  - pymdownx.details
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
 
 use_directory_urls: false
 
-# docs/ 外の top-level README.md, BACKLOG.md 等は docs/ 内への symlink で
-# 持ち込む (mkdocs は docs_dir 外を参照できない)。詳細は docs/README.md
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/dobachi/ralph-lab
+
+# トップレベルは 3 カテゴリ (ユーザー向け / 開発者向け / 研究ログ) の tab
+nav:
+  - Home: index.md
+  - ユーザー向け:
+      - 概要: for-users.md
+      - Getting Started: getting-started.md
+      - アーキテクチャ: architecture.md
+      - Usage Manual: usage-manual.md
+  - 開発者向け:
+      - 概要: for-developers.md
+      - Knowhow の目次: knowhow/README.md
+      - Knowhow:
+          - agent-cli 契約: knowhow/agent-cli-contract.md
+          - opencode 固有: knowhow/agent-cli-opencode.md
+          - aider integration: knowhow/aider-integration.md
+          - Gate 中立性: knowhow/gate-neutrality.md
+          - Gate 設計: knowhow/gate-design-patterns.md
+          - Gate 委譲: knowhow/gate-delegation-patterns.md
+          - Prompt patterns: knowhow/prompt-patterns.md
+          - Multi-model 比較: knowhow/multi-model-comparison.md
+      - 総括 (CONCLUSIONS): CONCLUSIONS.md
+      - AI 協働 spec 提案: proposal-ai-collaborative-spec.md
+  - 研究ログ:
+      - 概要: for-research.md
+      - Ralph landscape 調査: research/2026-09-06-ralph-loop-landscape.md
+      - Agent loop overview: research/2026-08-05-agent-loop-overview.md
+      - Research (index): research/README.md
+      - Plan (旧): research/plan.md
+      - Experiments (時系列):
+          - v1 P4 (2026-08-15 plan): experiments/2026-08-15-p4-plan.md
+          - v1 P4 (2026-08-15 results): experiments/2026-08-15-p4-results.md
+          - v2 P7 aider vs opencode: experiments/2026-09-06-p7-aider-vs-opencode.md
+          - v2 P9 pytest gate: experiments/2026-09-06-p9-code-fix-pytest.md
+          - v2 P10 plan: experiments/2026-09-06-p10-plan.md
+          - v2 P10 results: experiments/2026-09-06-p10-results.md
+          - v2 P11 real-doc plan: experiments/2026-09-06-p11-real-doc-plan.md
+          - v2 P11 results: experiments/2026-09-06-p11-real-doc-results.md
+          - v2 P12 plan: experiments/2026-09-06-p12-plan.md
+          - v2 P12 results: experiments/2026-09-06-p12-results.md
+          - v2 P13 plan: experiments/2026-09-06-p13-plan.md
+          - v2 P13 results: experiments/2026-09-06-p13-results.md
+          - v2 P13 CORRECTION: experiments/2026-09-06-p13-CORRECTION.md
+          - v2 P13-4 plan: experiments/2026-09-06-p13b-plan.md
+          - v2 P15 plan: experiments/2026-09-06-p15-plan.md
+          - v2 P15 results: experiments/2026-09-06-p15-results.md
+          - v2 P16 plan: experiments/2026-09-06-p16-plan.md
+          - v2 P16 results: experiments/2026-09-06-p16-results.md
+          - v2 P18 plan: experiments/2026-09-06-p18-plan.md
+          - v2 P18 results: experiments/2026-09-06-p18-results.md
+          - v2 P22 results: experiments/2026-09-06-p22-results.md
+          - v2 P24 plan: experiments/2026-09-07-p24-plan.md
+          - v2 P24 results: experiments/2026-09-07-p24-results.md
+      - BACKLOG: 01-BACKLOG.md
