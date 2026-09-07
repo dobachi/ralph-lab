@@ -12,7 +12,7 @@
 
 **初めて ralph-lab に触れるなら**:
 
-1. リポジトリ root の [README.md](../README.md) — 全体像
+1. リポジトリ root の [README.md](00-repo-README.md) — 全体像
 2. [research/2026-09-06-ralph-loop-landscape.md](research/2026-09-06-ralph-loop-landscape.md)
    § 1-3 — Ralph loop とは何か
 3. [knowhow/agent-cli-contract.md](knowhow/agent-cli-contract.md) — spec の
